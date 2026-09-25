@@ -1,0 +1,31 @@
+{
+  "name": "threads-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Threads-агент LAK — Chrome-расширение: сбор базы, черновики комментариев/постов в голосе Леры, второй пилот с переходом в автопилот",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "postinstall": "wxt prepare",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.2",
+    "idb": "^8.0.3",
+    "preact": "^10.29.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@types/chrome": "^0.1.0",
+    "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^20.14.5",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.1",
+    "wxt": "^0.21.4"
+  }
+}

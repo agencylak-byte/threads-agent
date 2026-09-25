@@ -1,0 +1,16 @@
+{
+  "_comment": "Стартовые handle конкурентов (SMM-агентства и стратеги) — их подписчиков и комментаторов обходим в поисках собственников/экспертов. Список из шортлиста Instagram (авг 2026); Лера сверяет, что эти аккаунты есть в Threads. Редактируется в настройках расширения.",
+  "competitors": [
+    "solo.marketing.ai",
+    "social.by.k",
+    "sveta.digital",
+    "dasha_smm_ii",
+    "kak_est.smm",
+    "trin.agency",
+    "natali_drz",
+    "iamagency.smm",
+    "mariapovzun.smm",
+    "profit_smm_agency",
+    "pro.stories.smm"
+  ]
+}
