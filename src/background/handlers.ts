@@ -104,6 +104,7 @@ export function registerBaseHandlers(): void {
     const next = command === 'stop' ? { ...st, status: 'stopped' as const } : { ...st, status: 'running' as const, startedAt: st.startedAt ?? Date.now(), pausedUntil: undefined, pauseReason: undefined };
     await engineStateItem.setValue(next);
     broadcast('state');
+    if (next.status === 'running') void import('./engine').then((m) => m.runTick());
     return next;
   });
 
@@ -115,6 +116,7 @@ export function registerBaseHandlers(): void {
       decidedAt: Date.now(),
     });
     broadcast('actions');
+    if (a) void import('./engine').then((m) => m.runTick());
     return { ok: !!a };
   });
 

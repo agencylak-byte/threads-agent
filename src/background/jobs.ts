@@ -96,6 +96,8 @@ export async function runJob(job: JobRequest): Promise<{ ok: boolean; error?: st
     running = false;
     stopRequested = false;
     setCurrentJob(null);
+    // не ждём минуту до alarm — сразу классифицируем и планируем по свежим данным
+    void import('./engine').then((m) => m.runTick());
   }
 }
 
