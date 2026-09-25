@@ -1,3 +1,4 @@
 import { render } from 'preact';
+import { App } from '@/ui/App';
 
-render(<div>Threads-агент LAK</div>, document.getElementById('app')!);
+render(<App />, document.getElementById('app')!);

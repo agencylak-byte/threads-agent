@@ -10,7 +10,7 @@ export default defineConfig({
     name: 'Threads-агент LAK',
     description:
       'Собирает базу постов в Threads, предлагает комментарии и посты в голосе владельца, ведёт очередь одобрения.',
-    default_locale: undefined,
+    options_ui: { open_in_tab: true },
     permissions: ['storage', 'alarms', 'sidePanel', 'tabs', 'downloads', 'notifications'],
     host_permissions: ['*://www.threads.com/*', '*://threads.com/*', 'https://openrouter.ai/*'],
     action: { default_title: 'Threads-агент LAK' },

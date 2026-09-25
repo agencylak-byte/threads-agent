@@ -1,3 +1,4 @@
 import { render } from 'preact';
+import { OptionsApp } from '@/ui/options/OptionsApp';
 
-render(<div>Настройки</div>, document.getElementById('app')!);
+render(<OptionsApp />, document.getElementById('app')!);
