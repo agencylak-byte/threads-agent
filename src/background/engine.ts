@@ -1,23 +1,29 @@
 import { ALARM_DAILY, ALARM_TICK, TICK_PERIOD_MIN } from '@/shared/constants';
-import { tick } from '@/engine/scheduler';
+import { setDispatchHook, tick } from '@/engine/scheduler';
+import { dispatchOnce } from '@/engine/dispatcher';
+import { isJobRunning } from './jobs';
+import { executeInTab, initAnomalyHandling } from './executor';
+import { dailyMetrics } from './daily';
 import { broadcast } from './state';
 import { log } from '@/shared/log';
 
-// Движок: alarm раз в минуту → tick(). Дневной alarm — метрики (сбор followers) в фазе 3.
+// Движок: alarm раз в минуту → tick() (expire → classify → plan → draft → dispatch). Дневной alarm — метрики.
 
 export function initEngine(): void {
+  initAnomalyHandling();
+  setDispatchHook(async () => {
+    if (isJobRunning()) return; // не мешаем сбору
+    // за один тик — не больше одного записывающего действия
+    const r = await dispatchOnce(executeInTab);
+    if (r === 'executed') broadcast('actions');
+  });
   browser.runtime.onInstalled.addListener(() => void ensureAlarms());
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === ALARM_TICK) void runTick();
-    if (alarm.name === ALARM_DAILY) void dailyHook?.();
+    if (alarm.name === ALARM_DAILY) void dailyMetrics();
   });
-}
-
-let dailyHook: (() => Promise<void>) | null = null;
-export function setDailyHook(h: (() => Promise<void>) | null): void {
-  dailyHook = h;
 }
 
 async function ensureAlarms(): Promise<void> {
