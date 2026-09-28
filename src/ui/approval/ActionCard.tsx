@@ -53,7 +53,18 @@ export function ActionCard({ action, compact = false }: { action: Action; compac
         </details>
       )}
       {compact ? (
-        <div class="small" style="white-space:pre-wrap">{text}</div>
+        <div>
+          <div class="small" style="white-space:pre-wrap">{text}</div>
+          {action.error && <div class="small muted" style="margin-top:4px">последняя попытка: {action.error.slice(0, 160)}{action.scheduledFor ? ` · повтор в ${new Date(action.scheduledFor).toLocaleTimeString('ru-RU')}` : ''}</div>}
+        </div>
+      ) : !action.draftText && !text ? (
+        <div>
+          <div class="muted small">Черновик пишется… {action.error ? `(последняя попытка: ${action.error.slice(0, 120)})` : ''}</div>
+          <div class="row" style="margin-top:6px">
+            <button disabled={busy} onClick={regenerate}>Написать сейчас</button>
+            <button disabled={busy} onClick={() => reject(false)}>Пропустить</button>
+          </div>
+        </div>
       ) : (
         <>
           <textarea value={text} onInput={(e) => setText((e.target as HTMLTextAreaElement).value)} />

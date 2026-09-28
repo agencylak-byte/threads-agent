@@ -2,7 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { request } from '@/shared/messages';
 import { QUESTIONS, optionLabel, parseAnswers } from '@/profile/questionnaire';
 import { toPromptBlock } from '@/profile/voice-profile';
-import { call, profile, questionnaire, state } from '../store';
+import { call, profile, questionnaire, settings, state } from '../store';
+import { VoiceSamples } from './VoiceSamples';
 
 // Голос: анкета + «Изучить мой голос» (собрать свои посты → извлечь голос моделью) + просмотр профиля.
 
@@ -12,6 +13,10 @@ export function Voice() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [showBlock, setShowBlock] = useState(false);
+  const [source, setSource] = useState('');
+  useEffect(() => {
+    setSource(settings.value?.voiceSourceHandle ?? '');
+  }, [settings.value]);
 
   useEffect(() => {
     const q = questionnaire.value ?? {};
@@ -32,16 +37,22 @@ export function Voice() {
 
   const learn = async () => {
     setBusy(true);
-    setMsg('Собираю ваши посты и снимаю голос — это 1–2 минуты…');
+    const handle = source.replace(/^@/, '').trim();
+    await call(() => request('SET_SETTINGS', { patch: { voiceSourceHandle: handle } }));
+    setMsg(`Собираю посты ${handle ? '@' + handle : 'вашего аккаунта'} и снимаю голос — это 1–2 минуты…`);
     const r = await call(() => request('LEARN_VOICE', {}));
     setBusy(false);
-    setMsg(r?.ok ? `Готово: голос снят с ${r.samplesCount} постов` : `Не получилось: ${r?.error ?? 'неизвестная ошибка'}`);
+    setMsg(r?.ok ? `Готово: голос снят с ${r.samplesCount} постов. Ниже можно выбрать, какие посты учитывать, и снять заново.` : `Не получилось: ${r?.error ?? 'неизвестная ошибка'}`);
+    setSamplesKey((k) => k + 1);
   };
+  const [samplesKey, setSamplesKey] = useState(0);
 
   return (
     <div>
       <div class="card">
         <div><b>Профиль голоса</b> {p ? `v${p.version}` : ''} <span class="small muted">· источники: seed {p?.sources.seedVersion}{p?.sources.extractedAt ? `, посты (${p.sources.samplesCount})` : ''}{p?.sources.questionnaireAt ? ', анкета' : ''}</span></div>
+        <label>Откуда брать посты (handle без @; пусто — текущий аккаунт)</label>
+        <input value={source} placeholder="например: lera.gashenko" onInput={(e) => setSource((e.target as HTMLInputElement).value)} />
         <div class="row" style="margin-top:8px">
           <button class="primary" disabled={busy || !state.value?.hasApiKey} onClick={learn}>Изучить мой голос по постам</button>
           <button onClick={() => setShowBlock(!showBlock)}>{showBlock ? 'Скрыть' : 'Показать'} как видит модель</button>
@@ -50,6 +61,8 @@ export function Voice() {
         {msg && <div class="banner ok" style="margin-top:8px">{msg}</div>}
         {showBlock && p && <pre class="small" style="white-space:pre-wrap;margin-top:8px">{toPromptBlock(p)}</pre>}
       </div>
+
+      <VoiceSamples key={samplesKey} onDone={setMsg} />
 
       <h2>Анкета</h2>
       {QUESTIONS.map((q) => (

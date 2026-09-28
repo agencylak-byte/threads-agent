@@ -5,7 +5,7 @@ import preact from '@preact/preset-vite';
 // Ключ OpenRouter и прочие секреты живут только в chrome.storage.local (см. src/shared/settings.ts).
 export default defineConfig({
   srcDir: 'src',
-  outDir: '.output',
+  outDir: 'build',
   manifest: {
     name: 'Threads-агент LAK',
     description:

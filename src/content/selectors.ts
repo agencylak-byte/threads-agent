@@ -5,10 +5,12 @@
 
 export type PageKind = 'feed' | 'search' | 'post' | 'profile' | 'activity' | 'messages' | 'other';
 
+// Реальная вёрстка Threads (снимок 25.09.2026, ru): у svg нет aria-label, есть атрибут title и <title>:
+// «Поставить "Нравится"» / «Убрать "Нравится"», «Ответ», «Сделать репост», «Поделиться».
 export const LABELS = {
-  like: ['Нравится', 'Like', 'Не нравится', 'Unlike'],
-  reply: ['Ответить', 'Reply', 'Ответ', 'Replies'],
-  repost: ['Репост', 'Repost', 'Поделиться', 'Share'],
+  like: ['Нравится', 'Like', 'Unlike'],
+  reply: ['Ответ', 'Ответить', 'Reply'],
+  repost: ['репост', 'Repost'],
   post: ['Опубликовать', 'Post'],
   profileNav: ['Профиль', 'Profile'],
   more: ['Ещё', 'Еще', 'More'],
@@ -20,6 +22,11 @@ export const LABELS = {
 
 export function ariaIn(labels: readonly string[]): string {
   return labels.map((l) => `[aria-label="${l}"]`).join(',');
+}
+
+/** svg-иконка: подпись может быть в title или aria-label, точная или как подстрока («Поставить "Нравится"»). */
+export function iconSel(labels: readonly string[]): string {
+  return labels.flatMap((l) => [`svg[title*="${l}"]`, `svg[aria-label*="${l}"]`]).join(',');
 }
 
 /** Селектор-запись: имя + список кандидатов, обязательность для страницы. */
@@ -51,14 +58,17 @@ export const SELECTORS = {
     requiredOn: ['feed', 'search', 'post'],
   },
   time: { candidates: ['time[datetime]'], requiredOn: ['feed', 'search', 'post', 'profile'] },
-  likeIcon: { candidates: [`svg${ariaIn(LABELS.like)}`], requiredOn: ['feed', 'search', 'post'] },
-  replyIcon: { candidates: [`svg${ariaIn(LABELS.reply)}`], requiredOn: ['feed', 'search', 'post'] },
-  repostIcon: { candidates: [`svg${ariaIn(LABELS.repost)}`], requiredOn: [] },
-  /** Шапка профиля. */
-  profileHeader: { candidates: ['header', 'main h1, main h2'], requiredOn: ['profile'] },
-  profileBio: { candidates: ['header div[dir="auto"]', 'main div[dir="auto"]'], requiredOn: [] },
+  likeIcon: { candidates: [iconSel(LABELS.like)], requiredOn: ['feed', 'search', 'post'] },
+  replyIcon: { candidates: [iconSel(LABELS.reply)], requiredOn: ['feed', 'search', 'post'] },
+  repostIcon: { candidates: [iconSel(LABELS.repost)], requiredOn: [] },
+  /** Имя в шапке профиля: <h1 dir="auto" translate="no"> внутри region «Содержимое столбца» (снимок 25.09.2026). */
+  profileHeader: {
+    candidates: ['div[role="region"] h1[dir="auto"][translate="no"]', 'div[role="region"] h1', 'main h1', 'header h1, header h2', 'h1[dir="auto"]'],
+    requiredOn: ['profile'],
+  },
+  /** Счётчик подписчиков: role=button со span[title="<число>"] и текстом «N подписчиков». */
   followersLink: {
-    candidates: ['a[href$="/followers"]', 'a[href*="followers"]', 'div[role="button"]'],
+    candidates: ['a[href$="/followers"]', 'div[role="button"] span[dir="auto"] span[title]', 'a[href*="followers"]'],
     requiredOn: ['profile'],
   },
   /** Левое меню → ссылка на свой профиль (единственная nav-ссылка вида /@handle). */
@@ -68,6 +78,16 @@ export const SELECTORS = {
   },
   composer: {
     candidates: ['div[contenteditable="true"][role="textbox"]', 'div[contenteditable="true"]', 'textarea'],
+    requiredOn: [],
+  },
+  /** Кнопка «Новая публикация» / «Создать» в меню или плейсхолдер «Пустое текстовое поле…» в ленте. */
+  createPost: {
+    candidates: [
+      'div[role="button"][aria-label^="Пустое текстовое поле"]',
+      `div[role="button"]:has(svg[aria-label="Новая публикация"]), div[role="button"]:has(svg[title="Новая публикация"])`,
+      'div[role="button"]:has(svg[aria-label="Создать"]), a[aria-label="Создать"], div[role="button"][aria-label="Создать"]',
+      'div[role="button"]:has(svg[aria-label="Create"]), div[role="button"][aria-label="Create"]',
+    ],
     requiredOn: [],
   },
   postButton: {

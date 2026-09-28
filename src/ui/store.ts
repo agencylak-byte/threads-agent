@@ -9,6 +9,7 @@ import { DEFAULT_AUTONOMY } from '@/shared/constants';
 
 export const state = signal<StateSnapshot | null>(null);
 export const proposed = signal<Action[]>([]);
+export const finished = signal<Action[]>([]);
 export const settings = signal<Settings | null>(null);
 export const hasApiKey = signal(false);
 export const autonomy = signal<AutonomyConfig>(DEFAULT_AUTONOMY);
@@ -27,6 +28,7 @@ export async function refreshState(): Promise<void> {
 export async function refreshActions(): Promise<void> {
   try {
     proposed.value = await request('LIST_ACTIONS', { status: ['proposed', 'approved', 'queued', 'executing'], limit: 100 });
+    finished.value = await request('LIST_ACTIONS', { status: ['done', 'failed'], limit: 30 });
   } catch (e) {
     error.value = String(e);
   }

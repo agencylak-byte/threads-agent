@@ -40,8 +40,12 @@ export function parsePostCard(container: Element, source: PostSource, sourceDeta
   const ref = postCodeFromHref(permalink?.getAttribute('href'));
   if (!ref) return null;
 
-  const authorLink = qa<HTMLAnchorElement>('authorLink', container).find((a) => !a.getAttribute('href')?.includes('/post/'));
+  // ссылок на автора две: аватар (без текста) и имя — берём ту, где есть текст
+  const authorLinks = qa<HTMLAnchorElement>('authorLink', container).filter((a) => !a.getAttribute('href')?.includes('/post/'));
+  const authorLink = authorLinks.find((a) => textOf(a)) ?? authorLinks[0];
   const authorHandle = handleFromHref(authorLink?.getAttribute('href')) ?? ref.handle;
+  const authorText = authorLink ? textOf(authorLink) : '';
+  const authorName = authorText && authorText !== authorHandle ? authorText : undefined;
 
   const timeEl = permalink?.querySelector('time') ?? q<HTMLTimeElement>('time', container);
   const postedAt = timeEl?.getAttribute('datetime') ? Date.parse(timeEl.getAttribute('datetime')!) : undefined;
@@ -57,7 +61,7 @@ export function parsePostCard(container: Element, source: PostSource, sourceDeta
     url: `https://www.threads.com/@${ref.handle}/post/${ref.code}`,
     code: ref.code,
     authorHandle,
-    authorName: authorLink ? textOf(authorLink) || undefined : undefined,
+    authorName,
     text,
     likes,
     replies,
@@ -75,6 +79,8 @@ function extractText(container: Element, authorHandle: string): string {
   const seen = new Set<string>();
   for (const b of blocks) {
     if (b.closest('a[href^="/@"]') || b.closest('time') || b.closest('[role="button"]')) continue;
+    // блок с временем/ссылкой на пост — служебный («1 ч.»), не текст
+    if (b.querySelector('time, a[href*="/post/"]')) continue;
     // берём только «листовые» блоки, чтобы не дублировать текст вложенных
     if (b.querySelector('div[dir="auto"], span[dir="auto"]')) continue;
     const t = textOf(b);

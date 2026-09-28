@@ -60,6 +60,13 @@ export async function runJob(job: JobRequest): Promise<{ ok: boolean; error?: st
         log('info', `collect-self: ${n} своих постов`);
         break;
       }
+      case 'collect-voice-source': {
+        const h = job.param?.replace(/^@/, '').trim();
+        if (!h) throw new Error('Не задан handle аккаунта-источника голоса');
+        const n = await collect(URLS.profile(h), { ...base, mode: 'profile', source: 'own', sourceDetail: `voice:${h}`, maxPosts: 80 });
+        log('info', `collect-voice-source @${h}: ${n} постов`);
+        break;
+      }
       case 'collect-activity': {
         const n = await collect(URLS.activity, { ...base, mode: 'activity', source: 'activity', sourceDetail: 'activity', maxPosts: 40 });
         log('info', `collect-activity: ${n} записей`);

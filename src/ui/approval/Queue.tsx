@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
 import { request } from '@/shared/messages';
-import { call, proposed, refreshActions, state } from '../store';
+import { call, finished, proposed, refreshActions, state } from '../store';
 import { ActionCard } from './ActionCard';
+import { ACTION_TYPE_LABELS } from '@/shared/constants';
 
 // Очередь одобрения: предложенные черновики → approve / edit / skip / regenerate. Плюс генерация постов.
 
@@ -19,9 +20,31 @@ export function Queue() {
       )}
       {waiting.map((a) => <ActionCard key={a.id} action={a} />)}
       {inFlight.length > 0 && (
-        <details>
+        <details open>
           <summary class="small muted">Одобрено и ждёт отправки: {inFlight.length}</summary>
           {inFlight.map((a) => <ActionCard key={a.id} action={a} compact />)}
+        </details>
+      )}
+      {finished.value.length > 0 && (
+        <details open>
+          <summary class="small muted">Отправлено и ошибки: {finished.value.length}</summary>
+          {finished.value.map((a) => (
+            <div key={a.id} class="card small">
+              <div>
+                <b>{a.status === 'done' ? (a.verifiedAt ? '✓ отправлено' : '✓ отправлено (не подтверждено)') : '✗ ошибка'}</b>
+                {' · '}{ACTION_TYPE_LABELS[a.type]} · @{a.targetHandle}
+                {a.executedAt && <span class="muted"> · {new Date(a.executedAt).toLocaleString('ru-RU')}</span>}
+                {a.threadUrl && <> · <a href={a.threadUrl} target="_blank" rel="noreferrer">открыть пост</a></>}
+              </div>
+              <div style="white-space:pre-wrap;margin-top:4px">{a.finalText ?? a.draftText}</div>
+              {a.error && <div class="muted" style="margin-top:4px">{a.error}</div>}
+              {a.status === 'failed' && (
+                <div class="row" style="margin-top:6px">
+                  <button onClick={async () => { await call(() => request('RETRY_ACTION', { actionId: a.id })); await refreshActions(); }}>Повторить</button>
+                </div>
+              )}
+            </div>
+          ))}
         </details>
       )}
     </div>

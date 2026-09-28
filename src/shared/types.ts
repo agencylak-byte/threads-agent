@@ -121,7 +121,9 @@ export interface Action {
   verifiedAt?: number;
   error?: string;
   rejectReason?: string;
+  /** Попытки исполнения в DOM (не путать с попытками написать черновик). */
   attempts: number;
+  draftAttempts?: number;
   dedupeKey: string;
   autonomyMode: AutonomyMode;
   llm?: LlmUsage;

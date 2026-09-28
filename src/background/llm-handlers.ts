@@ -42,16 +42,36 @@ export function registerLlmHandlers(): void {
     }
   });
 
-  registerHandler('LEARN_VOICE', async () => {
+  const voiceHandle = async () => {
     const self = await selfHandleItem.getValue();
-    if (!self) return { ok: false, error: 'Не определён свой handle — откройте threads.com' };
-    const job = await runJob({ kind: 'collect-self' });
-    if (!job.ok) return { ok: false, error: job.error };
-    const mine = (await listPostsByAuthor(self)).filter((p) => p.text.trim().length > 30);
-    const samples = mine
+    const source = (await getSettings()).voiceSourceHandle.replace(/^@/, '').trim();
+    return { self, source, handle: source || self };
+  };
+
+  registerHandler('LIST_VOICE_SAMPLES', async () => {
+    const { handle } = await voiceHandle();
+    if (!handle) return { handle: '', posts: [] };
+    const posts = (await listPostsByAuthor(handle))
+      .filter((p) => p.text.trim().length > 30)
       .sort((a, b) => (b.postedAt ?? b.firstSeenAt) - (a.postedAt ?? a.firstSeenAt))
-      .slice(0, 80)
-      .map((p) => p.text);
+      .slice(0, 150)
+      .map((p) => ({ id: p.id, text: p.text, postedAt: p.postedAt }));
+    return { handle, posts };
+  });
+
+  registerHandler('LEARN_VOICE', async ({ postIds, extraTexts, skipCollect }) => {
+    const { source, handle } = await voiceHandle();
+    if (!handle) return { ok: false, error: 'Не определён свой handle — откройте threads.com' };
+    if (!skipCollect) {
+      const job = await runJob(source ? { kind: 'collect-voice-source', param: source } : { kind: 'collect-self' });
+      if (!job.ok) return { ok: false, error: job.error };
+    }
+    const chosen = postIds ? new Set(postIds) : null;
+    const mine = (await listPostsByAuthor(handle)).filter((p) => p.text.trim().length > 30 && (!chosen || chosen.has(p.id)));
+    const samples = [
+      ...mine.sort((a, b) => (b.postedAt ?? b.firstSeenAt) - (a.postedAt ?? a.firstSeenAt)).slice(0, 80).map((p) => p.text),
+      ...(extraTexts ?? []).map((t) => t.trim()).filter((t) => t.length > 30),
+    ];
     try {
       const { extracted, usage } = await extractVoice(samples);
       const s = await getSettings();

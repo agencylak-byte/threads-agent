@@ -25,12 +25,24 @@ export async function executeInTab(action: Action): Promise<ExecResult> {
     await navigateWorkTab(url);
     const res = waitForMessage(tabId, isResult(action.id), 120_000);
     if (!sendToTab(tabId, { type: 'EXECUTE_ACTION', action, selfHandle: self, likeBefore: settings.likeBeforeComment })) {
-      return { ok: false, verified: false, error: 'content script не подключён' };
+      return { ok: false, verified: false, error: 'content script не подключён', transient: true };
     }
     const r = await res;
+    if (r.debugHtml) {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      browser.downloads
+        .download({
+          url: 'data:text/html;charset=utf-8,' + encodeURIComponent(r.debugHtml),
+          filename: `threads-agent/fail-${action.type}-${stamp}.html`,
+          saveAs: false,
+        })
+        .catch(() => undefined);
+    }
     return { ok: r.ok, verified: r.verified, error: r.error, resultUrl: r.resultUrl };
   } catch (e) {
-    return { ok: false, verified: false, error: e instanceof Error ? e.message : String(e) };
+    const msg = e instanceof Error ? e.message : String(e);
+    const transient = /вкладк|content script|timeout waiting for content|did not connect/i.test(msg);
+    return { ok: false, verified: false, error: msg, transient };
   }
 }
 

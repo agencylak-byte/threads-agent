@@ -36,6 +36,14 @@ export function Health() {
         </div>
         <div class="row" style="margin-top:8px">
           <button onClick={async () => setSelftest((await call(() => request('RUN_SELFTEST', {}))) ?? null)}>Проверить сейчас</button>
+          <button
+            onClick={async () => {
+              const r = await call(() => request('DUMP_PAGE', {}));
+              setSelftest(r ? { ok: r.ok, error: r.ok ? `Снимок сохранён: Загрузки/${r.filename}` : r.error } : null);
+            }}
+          >
+            Снимок страницы для разработчика
+          </button>
         </div>
         {selftest && (
           <div class={`banner ${selftest.ok ? 'ok' : 'err'}`} style="margin-top:8px">

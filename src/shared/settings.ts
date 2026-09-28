@@ -47,6 +47,8 @@ export const SettingsSchema = z.object({
   likeBeforeComment: z.boolean().default(false),
   /** Только чтение аккаунта конкурентов: сколько подписчиков брать за обход. */
   competitorFollowersPerRun: z.number().int().min(5).max(200).default(40),
+  /** Откуда снимать голос: handle другого (старого) аккаунта Леры в Threads; пусто — свой аккаунт. */
+  voiceSourceHandle: z.string().default(''),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

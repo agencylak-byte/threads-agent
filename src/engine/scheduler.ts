@@ -89,7 +89,8 @@ export async function draftStep(): Promise<number> {
       n++;
     } catch (e) {
       log('error', `draft failed for ${a.id}`, String(e));
-      await updateAction(a.id, { error: String(e), attempts: a.attempts + 1, ...(a.attempts >= 2 ? { status: 'failed' as const } : {}) });
+      const draftAttempts = (a.draftAttempts ?? 0) + 1;
+      await updateAction(a.id, { error: String(e), draftAttempts, ...(draftAttempts >= 3 ? { status: 'failed' as const } : {}) });
     }
   }
   return n;

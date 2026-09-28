@@ -1,15 +1,18 @@
 import type { Action } from '@/shared/types';
 import { detectAnomaly } from '../anomaly-watch';
+import { dumpPage } from '../page-dump';
 import { commentOnPost } from './comment';
 import { publishPost } from './publish';
 
 // Точка входа исполнения действия в DOM. SW уже перевёл вкладку на нужный URL (threadUrl).
+// При сбое прикладываем снимок DOM (debugHtml) — SW сохранит его в Загрузки для разбора.
 
 export interface ExecResult {
   ok: boolean;
   verified: boolean;
   error?: string;
   resultUrl?: string;
+  debugHtml?: string;
 }
 
 export async function executeAction(action: Action, selfHandle: string, likeBefore: boolean): Promise<ExecResult> {
@@ -35,6 +38,15 @@ export async function executeAction(action: Action, selfHandle: string, likeBefo
       return { ok: false, verified: false, error: `${action.type} — в следующем инкременте` };
   }
   const post = detectAnomaly();
-  if (post && r.ok) return { ...r, ok: false, verified: false, error: `аномалия после действия: ${post.kind}` };
+  if (post && r.ok) r = { ...r, ok: false, verified: false, error: `аномалия после действия: ${post.kind}` };
+  if (!r.ok || !r.verified) r.debugHtml = safeDump();
   return r;
+}
+
+function safeDump(): string | undefined {
+  try {
+    return dumpPage();
+  } catch {
+    return undefined;
+  }
 }

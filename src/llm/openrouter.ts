@@ -20,6 +20,7 @@ export interface ChatOptions {
   maxTokens?: number;
   temperature?: number;
   json?: boolean;
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   timeoutMs?: number;
   retries?: number;
   fetchImpl?: typeof fetch;
@@ -98,8 +99,11 @@ export async function chat(o: ChatOptions): Promise<ChatResult> {
             { role: 'system', content: o.system },
             { role: 'user', content: o.user },
           ],
-          max_tokens: o.maxTokens ?? 1024,
+          max_tokens: o.maxTokens ?? 2048,
           temperature: o.temperature ?? 0.7,
+          // Gemini 3.x — «думающие» модели: их скрытые reasoning-токены тратят max_tokens и обрезают ответ.
+          // Низкое усилие размышления + запас по лимиту — ответ приходит целиком (проверено 28.09.2026).
+          reasoning: { effort: o.reasoningEffort ?? 'low' },
           ...(o.json ? { response_format: { type: 'json_object' } } : {}),
         }),
       });
@@ -111,12 +115,15 @@ export async function chat(o: ChatOptions): Promise<ChatResult> {
       }
       const body = (await res.json()) as {
         model?: string;
-        choices?: Array<{ message?: { content?: string } }>;
+        choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
         error?: { message?: string };
       };
       if (body.error) throw new Error(`OpenRouter: ${body.error.message ?? 'error'}`);
       const text = body.choices?.[0]?.message?.content ?? '';
+      if (body.choices?.[0]?.finish_reason === 'length') {
+        log('error', `OpenRouter: ответ обрезан по max_tokens (${o.maxTokens ?? 2048}) — увеличьте лимит задачи`);
+      }
       const tokensIn = body.usage?.prompt_tokens ?? 0;
       const tokensOut = body.usage?.completion_tokens ?? 0;
       const model = body.model ?? o.model;

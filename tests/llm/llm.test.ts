@@ -45,6 +45,11 @@ describe('json-parse', () => {
     expect(extractJson('[{"x":"скобка } в строке"}]')).toBe('[{"x":"скобка } в строке"}]');
   });
 
+  it('чинит сырые переводы строк внутри строк JSON', () => {
+    const S = z.object({ text: z.string() });
+    expect(parseJsonWith(S, '{"text":"первая строка\nвторая строка"}')).toEqual({ text: 'первая строка\nвторая строка' });
+  });
+
   it('валидирует схемой и даёт понятную ошибку', () => {
     const S = z.object({ text: z.string() });
     expect(parseJsonWith(S, '{"text":"ok"}')).toEqual({ text: 'ok' });

@@ -12,10 +12,10 @@ Chrome-расширение (Manifest V3), которое работает в з
 cd threads-agent
 npm install
 node scripts/make-icons.mjs   # один раз, иконки для манифеста и уведомлений
-npm run build                 # → .output/chrome-mv3
+npm run build                 # → build/chrome-mv3
 ```
 
-Chrome → `chrome://extensions` → «Режим разработчика» → «Загрузить распакованное» → папка `threads-agent/.output/chrome-mv3`.
+Chrome → `chrome://extensions` → «Режим разработчика» → «Загрузить распакованное» → папка `threads-agent/build/chrome-mv3`.
 
 Для разработки: `npm run dev` (HMR, WXT сам откроет Chrome с расширением).
 

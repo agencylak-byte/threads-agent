@@ -78,6 +78,21 @@ export function registerBaseHandlers(): void {
     return { ok: r.broken.length === 0, broken: r.broken };
   });
 
+  registerHandler('DUMP_PAGE', async () => {
+    const tabId = await getWorkTab(false);
+    const res = waitForMessage(tabId, (m): m is Extract<ContentToSw, { type: 'PAGE_DUMP' }> => m.type === 'PAGE_DUMP', 15_000);
+    if (!sendToTab(tabId, { type: 'DUMP_PAGE' })) return { ok: false, error: 'content script не подключён — обновите вкладку threads.com' };
+    const r = await res;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const filename = `threads-agent/dump-${r.page}-${stamp}.html`;
+    await browser.downloads.download({
+      url: 'data:text/html;charset=utf-8,' + encodeURIComponent(r.html),
+      filename,
+      saveAs: false,
+    });
+    return { ok: true, filename };
+  });
+
   registerHandler('GET_PROFILE', async () => ({
     profile: (await voiceProfileItem.getValue()) ?? SEED_PROFILE,
     questionnaire: await questionnaireItem.getValue(),
@@ -115,6 +130,13 @@ export function registerBaseHandlers(): void {
       editedByHuman: text !== undefined,
       decidedAt: Date.now(),
     });
+    broadcast('actions');
+    if (a) void import('./engine').then((m) => m.runTick());
+    return { ok: !!a };
+  });
+
+  registerHandler('RETRY_ACTION', async ({ actionId }) => {
+    const a = await updateAction(actionId, { status: 'queued', attempts: 0, error: undefined, scheduledFor: undefined });
     broadcast('actions');
     if (a) void import('./engine').then((m) => m.runTick());
     return { ok: !!a };

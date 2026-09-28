@@ -22,6 +22,9 @@ export async function typeInto(editor: HTMLElement, text: string): Promise<void>
     await sleep(300);
   }
   if (!editorContains(editor, text)) throw new Error('ввод не отобразился в редакторе');
+  // подстраховка для React/Lexical: явное input-событие, чтобы состояние формы обновилось
+  editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text.slice(-1) }));
+  await sleep(300);
 }
 
 async function typeByChars(editor: HTMLElement, text: string): Promise<boolean> {
@@ -71,12 +74,18 @@ export function editorContains(editor: HTMLElement, text: string): boolean {
   return have.includes(want.slice(0, Math.min(want.length, 60)));
 }
 
-/** Ждём появления редактора после клика на «Ответить»/«Создать». */
+/** Ждём появления редактора после клика на «Ответить»/«Создать»: в диалоге, иначе — тот, что в фокусе, иначе первый видимый. */
 export function waitForEditor(root: ParentNode = document, timeoutMs = 8000): Promise<HTMLElement> {
+  const sel = 'div[contenteditable="true"][role="textbox"], div[contenteditable="true"], textarea';
   return waitFor(() => {
     const dialog = root.querySelector('div[role="dialog"]');
-    const scope = dialog ?? root;
-    const ed = scope.querySelector<HTMLElement>('div[contenteditable="true"][role="textbox"], div[contenteditable="true"], textarea');
-    return ed && ed.offsetParent !== null ? ed : null;
+    if (dialog) {
+      const ed = dialog.querySelector<HTMLElement>(sel);
+      if (ed && ed.offsetParent !== null) return ed;
+    }
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active.matches(sel) && active.offsetParent !== null) return active;
+    const all = Array.from(root.querySelectorAll<HTMLElement>(sel)).filter((e) => e.offsetParent !== null);
+    return all[0] ?? null;
   }, { timeoutMs });
 }

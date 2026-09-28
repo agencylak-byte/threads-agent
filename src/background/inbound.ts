@@ -71,6 +71,7 @@ async function handle(m: ContentToSw): Promise<void> {
       return;
     case 'COLLECT_DONE':
     case 'ACTION_RESULT':
+    case 'PAGE_DUMP':
       return; // обрабатываются адресно через waitForMessage
   }
 }

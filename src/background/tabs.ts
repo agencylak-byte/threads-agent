@@ -10,6 +10,12 @@ function isThreadsUrl(url?: string): boolean {
 }
 
 export async function getWorkTab(create = true): Promise<number> {
+  // Если пользователь сейчас смотрит на threads.com — работаем с этой вкладкой (у фоновой вкладки лента не отрисована).
+  const [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+  if (active?.id !== undefined && isThreadsUrl(active.url)) {
+    await workTabItem.setValue(active.id);
+    return active.id;
+  }
   const saved = await workTabItem.getValue();
   if (saved !== null) {
     try {
@@ -50,12 +56,19 @@ export async function navigateWorkTab(url: string, timeoutMs = 25_000): Promise<
   const tabId = await getWorkTab();
   const tab = await browser.tabs.get(tabId);
   if (tab.url && samePage(tab.url, url)) {
-    await waitForPort(tabId, 5000).catch(() => undefined);
-    // страница уже открыта — просим content подтвердить готовность через self-test ping
-    const ready = waitForMessage(tabId, isPageReady, 4000).catch(() => null);
-    sendToTab(tabId, { type: 'NAVIGATE', url });
+    const hasPort = await waitForPort(tabId, 5000).then(() => true).catch(() => false);
+    if (hasPort) {
+      // страница уже открыта — просим content подтвердить готовность
+      const ready = waitForMessage(tabId, isPageReady, 4000).catch(() => null);
+      sendToTab(tabId, { type: 'NAVIGATE', url });
+      const r = await ready;
+      if (r) return { selfHandle: r.selfHandle };
+    }
+    // порта нет (расширение обновилось, а вкладка старая) — перезагружаем вкладку
+    const ready = waitForMessage(tabId, isPageReady, timeoutMs);
+    await browser.tabs.reload(tabId);
     const r = await ready;
-    return { selfHandle: r?.selfHandle };
+    return { selfHandle: r.selfHandle };
   }
   const ready = waitForMessage(tabId, isPageReady, timeoutMs);
   // Полная загрузка вместо SPA-перехода: content-скрипт стартует заново, порт переподключается — так надёжнее.

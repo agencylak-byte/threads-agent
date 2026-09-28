@@ -1,22 +1,20 @@
 import { sleep, waitFor } from '../dom-utils';
+import { q } from '../selectors';
 import { typeInto, waitForEditor } from './typing';
 import { clickSubmit } from './submit';
 import { findPostContainers } from '../parsers/post-card';
 import type { ExecResult } from './execute';
 
-// Публикация нового поста: открыть composer (кнопка «Создать»/«Create» в левом меню или поле «Что нового?») → ввести → отправить.
-
-const CREATE_LABELS = ['Создать', 'Create', 'Новая публикация', 'New thread', 'Написать'];
+// Публикация нового поста: открыть composer («Новая публикация» в меню или плейсхолдер в ленте) → ввести → отправить.
 
 function findCreateButton(): HTMLElement | null {
-  const byAria = CREATE_LABELS.map((l) => `[aria-label="${l}"]`).join(',');
-  const el = document.querySelector<HTMLElement>(byAria);
+  const el = q<HTMLElement>('createPost');
   if (el) return el.closest<HTMLElement>('[role="button"], a, button') ?? el;
-  // поле «Что нового?» в ленте
-  const placeholder = Array.from(document.querySelectorAll<HTMLElement>('div[role="button"], div[contenteditable="true"]')).find((d) =>
-    /что нового|what'?s new|start a thread|начните тред/i.test(d.textContent ?? ''),
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>('div[role="button"]')).find((d) =>
+      /^(новая публикация|создать|create|new thread)$/i.test((d.textContent ?? '').trim()),
+    ) ?? null
   );
-  return placeholder ?? null;
 }
 
 export async function publishPost(text: string, selfHandle: string): Promise<ExecResult> {
@@ -32,7 +30,7 @@ export async function publishPost(text: string, selfHandle: string): Promise<Exe
   await sleep(1500 + Math.random() * 1500);
   try {
     await typeInto(editor, text);
-    await clickSubmit();
+    await clickSubmit(editor);
   } catch (e) {
     return { ok: false, verified: false, error: (e as Error).message };
   }

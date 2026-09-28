@@ -4,17 +4,15 @@ import { BUSINESS_FACTS, runPrompt } from './shared';
 import promptMd from '@/prompts/classify-lpr.md?raw';
 import type { LlmUsage, Post, PostAi } from '@/shared/types';
 
-const ResultSchema = z.object({
-  items: z.array(
-    z.object({
-      id: z.string(),
-      lprScore: z.number().min(0).max(100),
-      isFreelancer: z.boolean().default(false),
-      niche: z.string().default('не определено'),
-      reason: z.string().default(''),
-    }),
-  ),
+const ItemSchema = z.object({
+  id: z.string(),
+  lprScore: z.number().min(0).max(100),
+  isFreelancer: z.boolean().default(false),
+  niche: z.string().default('не определено'),
+  reason: z.string().default(''),
 });
+// модель иногда отдаёт голый массив вместо {items:[…]}
+const ResultSchema = z.union([z.object({ items: z.array(ItemSchema) }), z.array(ItemSchema).transform((items) => ({ items }))]);
 
 export function formatPostsForClassify(posts: Post[]): string {
   return posts

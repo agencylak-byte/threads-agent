@@ -19,6 +19,8 @@ export interface ExecResult {
   verified: boolean;
   error?: string;
   resultUrl?: string;
+  /** Сбой инфраструктуры (вкладка/порт), а не действия — не считается попыткой. */
+  transient?: boolean;
 }
 export type Executor = (action: Action) => Promise<ExecResult>;
 
@@ -95,6 +97,12 @@ async function applyResult(action: Action, r: ExecResult, now: number): Promise<
       await engineStateItem.setValue(applyAnomaly(st, { kind: 'unverified_streak', text: '3 подряд', url: action.threadUrl ?? '', at: now }, now));
     }
     log('info', `done ${action.type} → @${action.targetHandle} verified=${r.verified}`);
+    return;
+  }
+  if (r.transient) {
+    // вкладка/порт — вернём в очередь, попытку не засчитываем
+    await updateAction(action.id, { status: 'queued', error: r.error, attempts: action.attempts, scheduledFor: now + 60_000 });
+    log('info', `${action.type} → @${action.targetHandle}: временный сбой (${r.error}), повтор через минуту`);
     return;
   }
   const retry = action.attempts + 1 < 2; // всего две попытки

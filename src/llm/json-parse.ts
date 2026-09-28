@@ -44,13 +44,41 @@ function findEnd(s: string, start: number): number {
   return s.length - 1;
 }
 
+/** Модель иногда ставит «сырые» переводы строк внутри строк JSON — экранируем их. */
+export function repairJson(s: string): string {
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (const ch of s) {
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      else if (ch === '\n') {
+        out += '\\n';
+        continue;
+      } else if (ch === '\r') continue;
+      else if (ch === '\t') {
+        out += '\\t';
+        continue;
+      }
+    } else if (ch === '"') inStr = true;
+    out += ch;
+  }
+  return out;
+}
+
 export function parseJsonWith<T>(schema: z.ZodType<T>, text: string): T {
   const raw = extractJson(text);
   let data: unknown;
   try {
     data = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`json: невалидный JSON (${(e as Error).message}); начало: ${raw.slice(0, 120)}`);
+  } catch {
+    try {
+      data = JSON.parse(repairJson(raw));
+    } catch (e) {
+      throw new Error(`json: невалидный JSON (${(e as Error).message}); начало: ${raw.slice(0, 120)}`);
+    }
   }
   const r = schema.safeParse(data);
   if (!r.success) throw new Error(`json: не по схеме — ${r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);

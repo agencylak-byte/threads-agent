@@ -27,8 +27,13 @@ export function startContent(): void {
   const announce = () => {
     selfHandle = detectSelfHandle() ?? selfHandle;
     bridge.send({ type: 'PAGE_READY', url: location.href, selfHandle });
-    const st = runSelfTest(location.href);
-    if (st.broken.length) bridge.send({ type: 'SELFTEST_RESULT', page: st.page, broken: st.broken });
+    // self-test — через 4 с, когда React дорисует посты; иначе ложные «сломаны»
+    const url = location.href;
+    setTimeout(() => {
+      if (location.href !== url) return;
+      const st = runSelfTest(url);
+      bridge.send({ type: 'SELFTEST_RESULT', page: st.page, broken: st.broken });
+    }, 4000);
     startPassive();
   };
 
@@ -58,6 +63,11 @@ export function startContent(): void {
       case 'RUN_SELFTEST': {
         const st = runSelfTest(location.href);
         bridge.send({ type: 'SELFTEST_RESULT', page: st.page, broken: st.broken });
+        return;
+      }
+      case 'DUMP_PAGE': {
+        const { dumpPage } = await import('./page-dump');
+        bridge.send({ type: 'PAGE_DUMP', page: pageKind(location.href), html: dumpPage() });
         return;
       }
       case 'EXECUTE_ACTION': {

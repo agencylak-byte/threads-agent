@@ -39,15 +39,17 @@ describe('post-card / feed', () => {
     expect(posts.map((p) => p.id)).toEqual(['user_1/post/DKx1abc', 'user_2/post/DKx2def']);
     const p1 = posts[0]!;
     expect(p1.authorHandle).toBe('user_1');
-    expect(p1.authorName).toBe('Ольга Иванова');
+    expect(p1.authorName).toBeUndefined(); // в ленте Threads текст ссылки = handle, имени нет
     expect(p1.url).toBe('https://www.threads.com/@user_1/post/DKx1abc');
     expect(p1.text).toContain('Постим каждый день');
     expect(p1.text).toContain('Что я делаю не так?');
-    expect(p1.text).not.toContain('Ольга Иванова');
-    expect(p1.likes).toBe(1200);
+    expect(p1.text).not.toContain('user_1');
+    expect(p1.text).not.toMatch(/1\s?ч\./); // время не попадает в текст
+    expect(p1.likes).toBe(1205);
     expect(p1.replies).toBe(48);
     expect(p1.reposts).toBe(3);
-    expect(p1.postedAt).toBe(Date.parse('2026-09-24T09:15:00.000Z'));
+    expect(p1.postedAt).toBe(Date.parse('2026-09-25T08:15:35.000Z'));
+    expect(posts[1]!.likes).toBe(12); // «Убрать "Нравится"» тоже считается иконкой лайка
     expect(posts[1]!.replies).toBe(0);
   });
 
@@ -65,9 +67,11 @@ describe('profile', () => {
   it('handle из URL, имя, bio, подписчики; свой handle из левого меню', () => {
     const doc = load('profile');
     const p = parseProfile(URLS.profile('user_1'), doc, 'self_user');
-    expect(p).toMatchObject({ handle: 'user_1', displayName: 'Ольга Иванова', followers: 3400, isSelf: false });
+    expect(p).toMatchObject({ handle: 'user_1', displayName: 'Ольга Иванова', followers: 3412, isSelf: false });
     expect(p?.bio).toContain('Основатель онлайн-школы');
     expect(p?.bio).not.toContain('подписчиков');
+    expect(p?.bio).not.toContain('Маркетинг'); // теги не bio
+    expect(p?.bio).not.toContain('40 заявок'); // текст поста не bio
     expect(detectSelfHandle(doc)).toBe('self_user');
     expect(parseProfile(URLS.profile('self_user'), doc, 'self_user')?.isSelf).toBe(true);
     expect(runSelfTest(URLS.profile('user_1'), doc).broken).toEqual([]);
@@ -89,6 +93,16 @@ describe('followers', () => {
   it('уникальные handle без ссылок на посты', () => {
     expect(parseFollowers(load('followers'))).toEqual(['user_10', 'user_11']);
     expect(parseFollowers(load('followers'), ['user_10'])).toEqual(['user_11']);
+  });
+});
+
+describe('submit button', () => {
+  it('находит круглую кнопку «Ответ» рядом с inline-редактором, а не счётчик ответов на карточке', async () => {
+    const { findSubmitFor, findSubmitButton } = await import('@/content/actions/submit');
+    const doc = load('composer');
+    const editor = doc.getElementById('editor')!;
+    expect(findSubmitFor(editor)?.id).toBe('submit');
+    expect(findSubmitButton(doc)?.id).toBe('submit');
   });
 });
 

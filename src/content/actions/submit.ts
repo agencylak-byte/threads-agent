@@ -1,21 +1,53 @@
 import { LABELS } from '../selectors';
 import { sleep, waitFor } from '../dom-utils';
 
-// Поиск и нажатие кнопки «Опубликовать»/«Post» в открытом composer'е и проверка, что он закрылся.
+// Поиск и нажатие кнопки отправки composer'а и проверка, что текст ушёл.
+// Реальная вёрстка Threads (снимок 28.09.2026): у поля ответа под постом кнопка — круглая иконка
+// <div role="button"><span><svg aria-label="Ответ"/></span></div> рядом с «Развернуть конструктор»;
+// в диалоге нового поста — кнопка с текстом «Опубликовать». Ищем ОТНОСИТЕЛЬНО редактора с нашим текстом.
 
 function normalized(s: string | null | undefined): string {
   return (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-/** Кнопка отправки: role=button/button с текстом или aria-label из LABELS.post, внутри диалога если он есть. */
+const SUBMIT_LABELS = [...LABELS.post, 'Ответ', 'Ответить', 'Reply', 'Отправить', 'Send'].map((l) => l.toLowerCase());
+
+function labelOf(el: Element): string {
+  const svg = el.querySelector('svg');
+  return normalized(el.getAttribute('aria-label')) || normalized(svg?.getAttribute('aria-label')) || normalized(svg?.getAttribute('title')) || normalized(svg?.querySelector('title')?.textContent);
+}
+
+function isSubmitLike(btn: HTMLElement): boolean {
+  if (btn.closest('[data-pressable-container]')) return false; // кнопки «Ответ»/«Нравится» на карточках постов — не наши
+  const byLabel = labelOf(btn);
+  if (SUBMIT_LABELS.includes(byLabel)) return true;
+  const text = normalized(btn.textContent);
+  return text.length > 0 && text.length < 20 && SUBMIT_LABELS.includes(text);
+}
+
+/** Кнопка отправки для конкретного редактора: ближайший общий предок редактора и подходящей кнопки. */
+export function findSubmitFor(editor: HTMLElement): HTMLElement | null {
+  let scope: HTMLElement | null = editor.parentElement;
+  for (let depth = 0; scope && depth < 14; depth++) {
+    const buttons = Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button')).filter((b) => !b.contains(editor) && isSubmitLike(b));
+    if (buttons.length) {
+      // предпочитаем кнопку ПОСЛЕ редактора в DOM-порядке и без вложенных совпадений
+      const after = buttons.filter((b) => editor.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const pool = after.length ? after : buttons;
+      return pool.find((b) => !pool.some((o) => o !== b && b.contains(o))) ?? pool[0] ?? null;
+    }
+    if (scope.getAttribute('role') === 'dialog') break;
+    scope = scope.parentElement;
+  }
+  return null;
+}
+
+/** Без редактора: диалог или вся страница. */
 export function findSubmitButton(root: ParentNode = document): HTMLElement | null {
   const dialog = root.querySelector('div[role="dialog"]');
   const scope = dialog ?? root;
-  const labels = LABELS.post.map((l) => l.toLowerCase());
-  const candidates = Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button'));
-  const byLabel = candidates.find((b) => labels.includes(normalized(b.getAttribute('aria-label'))));
-  if (byLabel) return byLabel;
-  return candidates.find((b) => labels.includes(normalized(b.textContent)) && b.children.length <= 2) ?? null;
+  const candidates = Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button')).filter(isSubmitLike);
+  return candidates.find((b) => !candidates.some((o) => o !== b && b.contains(o))) ?? null;
 }
 
 export function isDisabled(btn: HTMLElement): boolean {
@@ -25,20 +57,41 @@ export function isDisabled(btn: HTMLElement): boolean {
   return op < 0.6;
 }
 
-export async function clickSubmit(root: ParentNode = document): Promise<void> {
-  const btn = await waitFor(() => {
-    const b = findSubmitButton(root);
-    return b && !isDisabled(b) ? b : null;
-  }, { timeoutMs: 6000 });
+/** Для диагностики: кнопки рядом с редактором. */
+export function describeButtons(editor?: HTMLElement | null): string {
+  const scope = editor?.parentElement?.parentElement?.parentElement?.parentElement ?? document.querySelector('div[role="dialog"]') ?? document;
+  return Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button'))
+    .map((b) => `[${labelOf(b) || normalized(b.textContent).slice(0, 25)}${isDisabled(b) ? ' (откл)' : ''}]`)
+    .slice(0, 20)
+    .join(' ');
+}
+
+export async function clickSubmit(editor?: HTMLElement | null): Promise<void> {
+  const locate = () => (editor ? findSubmitFor(editor) : null) ?? findSubmitButton();
+  let btn: HTMLElement;
+  try {
+    btn = await waitFor(() => {
+      const b = locate();
+      return b && !isDisabled(b) ? b : null;
+    }, { timeoutMs: 8000 });
+  } catch {
+    const found = locate();
+    throw new Error(
+      found
+        ? `кнопка отправки найдена, но неактивна (текст не принят редактором); кнопки: ${describeButtons(editor)}`
+        : `кнопка отправки не найдена; кнопки рядом: ${describeButtons(editor)}`,
+    );
+  }
   await sleep(400 + Math.random() * 600);
   btn.click();
-  // ждём, пока диалог/редактор исчезнет или очистится
+  // ждём, пока редактор очистится или диалог закроется
   await waitFor(
     () => {
-      const dialog = root.querySelector('div[role="dialog"]');
+      if (editor && document.contains(editor)) return normalized(editor.textContent).length === 0 ? true : null;
+      const dialog = document.querySelector('div[role="dialog"]');
       if (!dialog) return true;
       const ed = dialog.querySelector<HTMLElement>('div[contenteditable="true"]');
-      return !ed || normalized(ed.textContent).length === 0;
+      return !ed || normalized(ed.textContent).length === 0 ? true : null;
     },
     { timeoutMs: 10_000 },
   ).catch(() => undefined);

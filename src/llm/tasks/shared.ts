@@ -38,7 +38,8 @@ export async function runPrompt(call: TaskCall): Promise<{ result: ChatResult; u
       model,
       system: rendered.system,
       user: rendered.user,
-      maxTokens: call.maxTokens ?? 1024,
+      // запас ×3: у «думающих» моделей часть лимита уходит на reasoning даже при effort=low
+      maxTokens: Math.max(1500, (call.maxTokens ?? 1024) * 3),
       temperature: call.temperature ?? 0.7,
       json: call.json ?? true,
     });

@@ -1,4 +1,4 @@
-import { LABELS, ariaIn, postCodeFromHref, q } from '../selectors';
+import { postCodeFromHref, q } from '../selectors';
 import { sleep, waitFor, scrollIntoViewSmooth } from '../dom-utils';
 import { findPostContainers } from '../parsers/post-card';
 import { typeInto, waitForEditor } from './typing';
@@ -28,14 +28,27 @@ export function findCardByPostId(postId: string, root: ParentNode = document): E
 }
 
 function replyButton(card: Element): HTMLElement | null {
-  const icon = card.querySelector<SVGElement>(`svg${ariaIn(LABELS.reply)}`);
-  const btn = icon?.closest<HTMLElement>('[role="button"], button, a');
-  return btn ?? null;
+  const icon = q<SVGElement>('replyIcon', card);
+  return icon?.closest<HTMLElement>('[role="button"], button, a') ?? null;
 }
 
+/** Лайк только если ещё не поставлен («Поставить "Нравится"» / «Like»), иначе кликом снимем. */
 function likeButton(card: Element): HTMLElement | null {
-  const icon = card.querySelector<SVGElement>(`svg[aria-label="Нравится"], svg[aria-label="Like"]`);
-  return icon?.closest<HTMLElement>('[role="button"], button') ?? null;
+  const icon = q<SVGElement>('likeIcon', card);
+  const label = `${icon?.getAttribute('title') ?? ''} ${icon?.getAttribute('aria-label') ?? ''}`;
+  if (!icon || /убрать|unlike/i.test(label)) return null;
+  return icon.closest<HTMLElement>('[role="button"], button') ?? null;
+}
+
+/** На странице поста внизу есть inline-поле «Ответьте <handle>…» — оно отвечает корневому посту без клика по кнопке. */
+export function findInlineReplyEditor(handle: string, root: ParentNode = document): HTMLElement | null {
+  const eds = Array.from(root.querySelectorAll<HTMLElement>('div[contenteditable="true"][role="textbox"]'));
+  return (
+    eds.find((e) => {
+      const ph = (e.getAttribute('aria-placeholder') ?? '').toLowerCase();
+      return ph.includes(handle.toLowerCase()) && /ответьте|reply to/.test(ph);
+    }) ?? null
+  );
 }
 
 export async function commentOnPost(t: CommentTarget): Promise<ExecResult> {
@@ -52,15 +65,27 @@ export async function commentOnPost(t: CommentTarget): Promise<ExecResult> {
     }
   }
 
-  const reply = replyButton(card);
-  if (!reply) return { ok: false, verified: false, error: 'кнопка «Ответить» не найдена' };
-  reply.click();
-
-  let editor: HTMLElement;
-  try {
-    editor = await waitForEditor();
-  } catch {
-    return { ok: false, verified: false, error: 'редактор ответа не открылся' };
+  const handle = t.postId.split('/post/')[0] ?? '';
+  let editor: HTMLElement | null = null;
+  const inline = findInlineReplyEditor(handle);
+  if (inline && inline.offsetParent !== null) {
+    editor = inline;
+    scrollIntoViewSmooth(inline);
+    await sleep(500);
+    inline.focus();
+  } else {
+    // кнопки под постом могут дорисоваться позже карточки — ждём именно кнопку, перечитывая карточку
+    const reply = await waitFor(() => {
+      const c = findCardByPostId(t.postId);
+      return c ? replyButton(c) : null;
+    }, { timeoutMs: 8000 }).catch(() => null);
+    if (!reply) return { ok: false, verified: false, error: 'кнопка «Ответить» не найдена и нет поля ответа внизу' };
+    reply.click();
+    try {
+      editor = await waitForEditor();
+    } catch {
+      return { ok: false, verified: false, error: 'редактор ответа не открылся' };
+    }
   }
   try {
     await typeInto(editor, t.text);
@@ -68,7 +93,7 @@ export async function commentOnPost(t: CommentTarget): Promise<ExecResult> {
     return { ok: false, verified: false, error: `ввод: ${(e as Error).message}` };
   }
   try {
-    await clickSubmit();
+    await clickSubmit(editor);
   } catch (e) {
     return { ok: false, verified: false, error: `отправка: ${(e as Error).message}` };
   }

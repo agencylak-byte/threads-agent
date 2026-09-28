@@ -56,7 +56,7 @@ export const TICK_PERIOD_MIN = 1;
 export const PORT_NAME = 'threads-agent-content';
 
 export const PROPOSAL_TTL_MS = 48 * 60 * 60 * 1000;
-export const RETRY_DELAY_MS: [number, number] = [30 * 60 * 1000, 60 * 60 * 1000];
+export const RETRY_DELAY_MS: [number, number] = [2 * 60 * 1000, 5 * 60 * 1000];
 
 /** Пауза после аномалии: 1-я → 6 ч, 2-я за сутки → 24 ч, 3-я → стоп. */
 export const ANOMALY_PAUSE_MS = [6 * 60 * 60 * 1000, 24 * 60 * 60 * 1000] as const;
