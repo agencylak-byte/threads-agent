@@ -106,6 +106,25 @@ describe('submit button', () => {
   });
 });
 
+describe('search: вкладка «Недавние»', () => {
+  it('кликает «Недавние», если активен «Топ», и не трогает, если уже активна', async () => {
+    const { ensureRecentTab } = await import('@/content/collector');
+    const doc = new DOMParser().parseFromString(
+      '<div><div role="tab" aria-selected="true"><span>Топ</span></div><div role="tab" aria-selected="false" id="recent"><span>Недавние</span></div><div role="tab">Профили</div></div>',
+      'text/html',
+    );
+    let clicks = 0;
+    doc.getElementById('recent')!.addEventListener('click', () => clicks++);
+    expect(await ensureRecentTab(doc)).toBe(true);
+    expect(clicks).toBe(1);
+    doc.getElementById('recent')!.setAttribute('aria-selected', 'true');
+    await ensureRecentTab(doc);
+    expect(clicks).toBe(1);
+    const none = new DOMParser().parseFromString('<div>нет вкладок</div>', 'text/html');
+    expect(await ensureRecentTab(none)).toBe(false);
+  }, 10_000);
+});
+
 describe('pageKind', () => {
   it.each([
     ['https://www.threads.com/', 'feed'],

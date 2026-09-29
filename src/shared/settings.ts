@@ -16,7 +16,11 @@ export const SettingsSchema = z.object({
   fallbackModel: z.string().default(''),
   keywords: z.array(z.string()).default(keywordsSeed.keywords),
   competitors: z.array(z.string()).default(competitorsSeed.competitors),
-  lprMinScore: z.number().min(0).max(100).default(70),
+  /** Главный порог: балл «стоит комментировать» (0–100). */
+  commentMin: z.number().min(0).max(100).default(70),
+  /** Вспомогательные пороги (автор похож на клиента; пост по теме). */
+  lprMinScore: z.number().min(0).max(100).default(50),
+  relevanceMin: z.number().min(0).max(100).default(40),
   limits: z
     .object({
       'comment-on-stranger': z.number().int().min(0),

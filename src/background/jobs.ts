@@ -48,6 +48,18 @@ export async function runJob(job: JobRequest): Promise<{ ok: boolean; error?: st
         log('info', `collect-keyword «${kw}»: ${n} постов`);
         break;
       }
+      case 'collect-all-keywords': {
+        let total = 0;
+        for (const kw of s.keywords.slice(0, 12)) {
+          if (stopRequested) break;
+          setCurrentJob({ kind: 'collect-all-keywords', param: kw });
+          const n = await collect(URLS.search(kw, true), { ...base, mode: 'search', source: 'keyword', sourceDetail: kw, maxPosts: Math.min(s.collectMaxPosts, 40) });
+          total += n;
+          await new Promise((r) => setTimeout(r, 3000 + Math.random() * 4000));
+        }
+        log('info', `collect-all-keywords: ${total} постов по ${Math.min(s.keywords.length, 12)} ключам`);
+        break;
+      }
       case 'collect-feed': {
         const n = await collect(URLS.feed, { ...base, mode: 'feed', source: 'feed', sourceDetail: 'for-you' });
         log('info', `collect-feed: ${n} постов`);

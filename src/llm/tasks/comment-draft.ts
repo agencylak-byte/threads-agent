@@ -29,7 +29,7 @@ export async function draftComment(post: Post, usedOpeners: string[], hint?: str
       authorName: post.authorName ? ` (${post.authorName})` : '',
       authorBio: post.authorBioSnapshot ?? '—',
       authorFollowers: post.authorFollowersSnapshot ?? '—',
-      niche: post.ai?.niche ?? 'не определено',
+      niche: `${post.ai?.niche ?? 'не определено'}${post.ai?.topic ? `; тема поста: ${post.ai.topic}` : ''}`,
       postText: post.text.slice(0, 1500),
       maxChars,
       address: ctx.profile.address,

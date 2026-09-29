@@ -26,6 +26,27 @@ export function Health() {
         <p class="small muted">В режиме «предложить» движок только классифицирует посты и готовит черновики. Отправка — по вашему клику в очереди.</p>
       </div>
 
+      {s && (
+        <div class="card">
+          <div><b>Воронка отбора</b> <span class="small muted">(без своих постов)</span></div>
+          <table class="small" style="margin-top:6px;border-spacing:0 2px">
+            <tr><td>Собрано постов</td><td style="padding-left:12px"><b>{s.funnel.unclassified + s.funnel.classified}</b></td></tr>
+            <tr><td>Ждут оценки</td><td style="padding-left:12px">{s.funnel.unclassified}</td></tr>
+            <tr><td>Оценено</td><td style="padding-left:12px">{s.funnel.classified}</td></tr>
+            <tr><td>Балл «стоит комментировать» выше порога</td><td style="padding-left:12px">{s.funnel.lprPass}</td></tr>
+            <tr><td>…и не старше недели (кандидаты)</td><td style="padding-left:12px"><b>{s.funnel.candidates}</b></td></tr>
+            <tr><td>Уже прокомментировано</td><td style="padding-left:12px">{s.funnel.commented}</td></tr>
+          </table>
+          <p class="small muted" style="margin:6px 0 0">
+            {s.funnel.unclassified > 0
+              ? 'Оценка идёт по 30 постов в минуту, пока движок работает.'
+              : s.funnel.candidates === 0
+                ? 'Кандидатов нет: соберите новые посты по ключевым словам или понизьте пороги в «Источниках».'
+                : 'Кандидаты есть — черновики появятся в очереди в ближайшие минуты.'}
+          </p>
+        </div>
+      )}
+
       <div class="card">
         <div><b>Селекторы Threads</b></div>
         <div class="small muted">

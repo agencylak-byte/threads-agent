@@ -6,8 +6,11 @@ import type { LlmUsage, Post, PostAi } from '@/shared/types';
 
 const ItemSchema = z.object({
   id: z.string(),
+  commentScore: z.number().min(0).max(100),
   lprScore: z.number().min(0).max(100),
+  relevance: z.number().min(0).max(100).default(50),
   isFreelancer: z.boolean().default(false),
+  topic: z.string().default(''),
   niche: z.string().default('не определено'),
   reason: z.string().default(''),
 });
@@ -36,7 +39,17 @@ export async function classifyPosts(posts: Post[]): Promise<{ ai: Map<string, Po
   const now = Date.now();
   for (const it of parsed.items) {
     if (!posts.some((p) => p.id === it.id)) continue;
-    ai.set(it.id, { lprScore: Math.round(it.lprScore), niche: it.niche, isFreelancer: it.isFreelancer, reason: it.reason, model: usage.model, at: now });
+    ai.set(it.id, {
+      commentScore: Math.round(it.commentScore),
+      lprScore: Math.round(it.lprScore),
+      relevance: Math.round(it.relevance),
+      topic: it.topic || undefined,
+      niche: it.niche,
+      isFreelancer: it.isFreelancer,
+      reason: it.reason,
+      model: usage.model,
+      at: now,
+    });
   }
   return { ai, usage };
 }

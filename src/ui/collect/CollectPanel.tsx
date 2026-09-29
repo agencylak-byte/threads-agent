@@ -36,6 +36,11 @@ export function CollectPanel() {
         </div>
       )}
 
+      <div class="row" style="margin:10px 0">
+        <button class="primary" disabled={busy} onClick={() => start('collect-all-keywords')}>Собрать свежее по всем ключам</button>
+        <span class="small muted">до 12 ключей × 40 постов, только недавние</span>
+      </div>
+
       <h2>По ключевому слову</h2>
       <div class="row">
         <input list="kw-list" value={kw} onInput={(e) => setKw((e.target as HTMLInputElement).value)} placeholder="например: нет заявок" />

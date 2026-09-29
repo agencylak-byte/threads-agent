@@ -22,7 +22,14 @@ export async function planComments(ctx: PlanContext, limit = 10): Promise<Action
   const status = initialStatus(mode);
   if (!status) return [];
   const now = ctx.now ?? Date.now();
-  const candidates = await listCandidates(ctx.settings.lprMinScore, ctx.settings.maxPostAgeDays * 86_400_000, limit * 3, now);
+  const candidates = await listCandidates(
+    ctx.settings.lprMinScore,
+    ctx.settings.maxPostAgeDays * 86_400_000,
+    limit * 3,
+    now,
+    ctx.settings.relevanceMin,
+    ctx.settings.commentMin,
+  );
   const created: Action[] = [];
   for (const post of candidates) {
     if (created.length >= limit) break;
@@ -121,6 +128,6 @@ export async function planReplies(ctx: PlanContext, limit = 10): Promise<Action[
 
 export function contextFor(p: Post): string {
   const head = `@${p.authorHandle}${p.authorName ? ` (${p.authorName})` : ''}${p.authorBioSnapshot ? ` — ${p.authorBioSnapshot}` : ''}`;
-  const meta = `♥ ${p.likes} · ответов ${p.replies}${p.ai ? ` · ЛПР ${p.ai.lprScore} (${p.ai.niche}) — ${p.ai.reason}` : ''}`;
+  const meta = `♥ ${p.likes} · ответов ${p.replies}${p.ai ? ` · стоит комментировать: ${p.ai.commentScore ?? '—'} (автор ${p.ai.lprScore}, тема ${p.ai.relevance ?? '—'}${p.ai.topic ? ` — ${p.ai.topic}` : ''}) · ${p.ai.niche} — ${p.ai.reason}` : ''}`;
   return `${head}\n${meta}\n\n${p.text}`;
 }

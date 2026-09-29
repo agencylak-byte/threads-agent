@@ -46,7 +46,14 @@ export type SwToContent =
   | { type: 'RUN_SELFTEST' }
   | { type: 'DUMP_PAGE' };
 
-export type JobKind = 'collect-keyword' | 'collect-competitor' | 'collect-feed' | 'collect-self' | 'collect-activity' | 'collect-voice-source';
+export type JobKind =
+  | 'collect-keyword'
+  | 'collect-all-keywords'
+  | 'collect-competitor'
+  | 'collect-feed'
+  | 'collect-self'
+  | 'collect-activity'
+  | 'collect-voice-source';
 
 export interface JobRequest {
   kind: JobKind;
@@ -58,6 +65,8 @@ export interface StateSnapshot {
   engine: EngineState;
   selfHandle: string;
   counts: { posts: number; authors: number; proposed: number; queued: number; done: number; events: number };
+  /** Воронка отбора: почему очередь такая, какая есть. */
+  funnel: { unclassified: number; classified: number; lprPass: number; candidates: number; skipped: number; commented: number };
   currentJob: JobRequest | null;
   lastSelftest?: { page: string; broken: string[]; at: number };
   todayCost: number;

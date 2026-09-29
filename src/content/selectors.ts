@@ -139,7 +139,7 @@ export function pageKind(url: string): PageKind {
 export const URLS = {
   feed: 'https://www.threads.com/',
   search: (q: string, recent = false) =>
-    `https://www.threads.com/search?q=${encodeURIComponent(q)}&serp_type=${recent ? 'recent' : 'default'}`,
+    `https://www.threads.com/search?q=${encodeURIComponent(q)}&serp_type=default${recent ? '&filter=recent' : ''}`,
   profile: (handle: string) => `https://www.threads.com/@${handle.replace(/^@/, '')}`,
   followers: (handle: string) => `https://www.threads.com/@${handle.replace(/^@/, '')}/followers`,
   activity: 'https://www.threads.com/activity',

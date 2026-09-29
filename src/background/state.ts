@@ -1,4 +1,4 @@
-import { countPosts } from '@/db/repo-posts';
+import { countPosts, getAllPosts } from '@/db/repo-posts';
 import { countAuthors } from '@/db/repo-authors';
 import { countActionsByStatus } from '@/db/repo-actions';
 import { countEvents } from '@/db/repo-events';
@@ -37,10 +37,29 @@ export async function buildSnapshot(): Promise<StateSnapshot> {
     voiceProfileItem.getValue(),
   ]);
   const today = await getMetrics(dateKey(Date.now(), settings.timezone));
+  const all = await getAllPosts();
+  const funnel = { unclassified: 0, classified: 0, lprPass: 0, candidates: 0, skipped: 0, commented: 0 };
+  const maxAge = settings.maxPostAgeDays * 86_400_000;
+  const now = Date.now();
+  for (const p of all) {
+    if (p.source === 'own') continue;
+    if (!p.ai) {
+      funnel.unclassified++;
+      continue;
+    }
+    funnel.classified++;
+    if (p.actionStatus === 'skipped') funnel.skipped++;
+    if (p.actionStatus === 'commented') funnel.commented++;
+    if (p.ai.isFreelancer || (p.ai.commentScore ?? 0) < settings.commentMin) continue;
+    funnel.lprPass++;
+    const fresh = now - (p.postedAt ?? p.firstSeenAt) <= maxAge;
+    if (p.ai.lprScore >= settings.lprMinScore && (p.ai.relevance ?? 0) >= settings.relevanceMin && fresh && p.actionStatus === 'none') funnel.candidates++;
+  }
   return {
     engine,
     selfHandle,
     counts: { posts, authors, proposed, queued, done, events },
+    funnel,
     currentJob,
     lastSelftest,
     todayCost: today.llmCostUsd,

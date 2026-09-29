@@ -92,6 +92,8 @@ export class Collector {
       if (t) this.sink.thread(t.root, t.replies);
       return t ? t.replies.length + 1 : 0;
     }
+    if (params.mode === 'search') await ensureRecentTab();
+    this.resetSeen();
     this.startPassive(params.source, params.sourceDetail);
     let idle = 0;
     let lastCount = 0;
@@ -131,4 +133,19 @@ export class Collector {
 function findScrollable(root: Element): HTMLElement | null {
   const all = Array.from(root.querySelectorAll<HTMLElement>('*'));
   return all.find((el) => el.scrollHeight > el.clientHeight + 40 && getComputedStyle(el).overflowY !== 'visible') ?? null;
+}
+
+/** На странице поиска переключиться на вкладку «Недавние»: «Топ» отдаёт посты любой давности. */
+export async function ensureRecentTab(root: ParentNode = document): Promise<boolean> {
+  const labels = ['недавние', 'recent'];
+  const all = Array.from(root.querySelectorAll<HTMLElement>('[role="tab"], a[role="link"], div[role="button"], a'));
+  const tabs = all.filter((el) => labels.includes((el.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase()));
+  const tab = tabs.find((t) => !tabs.some((o) => o !== t && t.contains(o)));
+  if (!tab) return false;
+  const active = tab.getAttribute('aria-selected') === 'true' || tab.getAttribute('aria-current') === 'page';
+  if (!active) {
+    tab.click();
+    await sleep(2500);
+  }
+  return true;
 }

@@ -13,11 +13,7 @@ export function Queue() {
   return (
     <div>
       <PostGenerator />
-      {!items.length && (
-        <div class="muted">
-          Очередь пуста. Соберите посты во вкладке «Сбор», задайте ключ OpenRouter и запустите движок в «Здоровье» — он классифицирует авторов и предложит комментарии.
-        </div>
-      )}
+{!items.length && <EmptyState />}
       {waiting.map((a) => <ActionCard key={a.id} action={a} />)}
       {inFlight.length > 0 && (
         <details open>
@@ -46,6 +42,36 @@ export function Queue() {
             </div>
           ))}
         </details>
+      )}
+    </div>
+  );
+}
+
+function EmptyState() {
+  const s = state.value;
+  if (!s) return <div class="muted">Загрузка…</div>;
+  const f = s.funnel;
+  const engineOff = s.engine.status === 'stopped';
+  const busy = s.currentJob !== null;
+  let hint: string;
+  if (!s.hasApiKey) hint = 'Не задан ключ OpenRouter — «Здоровье» → «Открыть настройки ключа».';
+  else if (engineOff) hint = 'Движок остановлен — «Здоровье» → «Запустить».';
+  else if (f.unclassified > 0) hint = `Оцениваю посты: осталось ${f.unclassified}. Черновики появятся через несколько минут.`;
+  else if (f.candidates === 0) hint = 'Свежих постов выше порога нет. Нажмите «Собрать свежее по всем ключам» — соберу недавние посты и оценю.';
+  else hint = 'Кандидаты есть — пишу черновики, обновите через минуту.';
+  return (
+    <div class="card">
+      <div class="muted">Очередь пуста.</div>
+      <div class="small" style="margin-top:6px">
+        Собрано {f.unclassified + f.classified} · оценено {f.classified} · выше порога {f.lprPass} · свежих кандидатов <b>{f.candidates}</b>
+      </div>
+      <div class="small" style="margin-top:6px">{hint}</div>
+      {!engineOff && s.hasApiKey && f.unclassified === 0 && f.candidates === 0 && (
+        <div class="row" style="margin-top:8px">
+          <button class="primary" disabled={busy} onClick={() => call(() => request('START_JOB', { kind: 'collect-all-keywords' }))}>
+            Собрать свежее по всем ключам
+          </button>
+        </div>
       )}
     </div>
   );

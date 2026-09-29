@@ -31,7 +31,7 @@ function obs(id: string, over: Partial<ObservedPost> = {}): ObservedPost {
 
 async function classified(id: string, score: number, over: Partial<ObservedPost> = {}, isFreelancer = false): Promise<Post> {
   await upsertPosts([obs(id, over)], NOW - 1000);
-  await markClassified(id, { lprScore: score, niche: 'эксперт', isFreelancer, reason: '', model: 'm', at: NOW });
+  await markClassified(id, { lprScore: score, commentScore: 90, relevance: 90, niche: 'эксперт', isFreelancer, reason: '', model: 'm', at: NOW });
   return (await getPost(id))!;
 }
 
@@ -96,8 +96,11 @@ describe('planner.planComments', () => {
   it('создаёт proposed для подходящих, пропускает слабых/фрилансеров/свои, помечает посты', async () => {
     await classified('a/post/1', 90);
     await classified('b/post/2', 95, {}, true);
-    await classified('c/post/3', 50);
+    await classified('c/post/3', 30);
     await classified('me/post/4', 99);
+    // пост по теме, но не про бизнес — отсекается порогом relevance
+    await upsertPosts([obs('offtopic/post/5')], NOW - 1000);
+    await markClassified('offtopic/post/5', { lprScore: 90, commentScore: 20, relevance: 20, niche: 'x', isFreelancer: false, reason: '', model: 'm', at: NOW });
     const created = await planComments(ctx);
     expect(created.map((a) => a.targetHandle)).toEqual(['a']);
     expect(created[0]?.status).toBe('proposed');
@@ -106,6 +109,25 @@ describe('planner.planComments', () => {
     expect((await getPost('me/post/4'))?.actionStatus).toBe('skipped');
     // повторный прогон ничего не дублирует
     expect(await planComments(ctx)).toEqual([]);
+  });
+
+  it('снятое системой предложение (expired) не блокирует повторное, отклонённое Лерой — блокирует', async () => {
+    const { expireAllProposed, updateAction, getActionByKey } = await import('@/db/repo-actions');
+    const { setActionStatus } = await import('@/db/repo-posts');
+    await classified('a/post/1', 90);
+    const [first] = await planComments(ctx);
+    expect(first?.status).toBe('proposed');
+    // система сняла предложение (переоценка) и вернула пост на рассмотрение
+    expect(await expireAllProposed('test', NOW)).toBe(1);
+    await setActionStatus('a/post/1', 'none');
+    const again = await planComments(ctx);
+    expect(again.map((x) => x.targetHandle)).toEqual(['a']);
+    expect(again[0]?.id).not.toBe(first?.id);
+    // а вот отклонённое человеком — больше не предлагаем
+    await updateAction(again[0]!.id, { status: 'rejected' });
+    await setActionStatus('a/post/1', 'none');
+    expect(await planComments(ctx)).toEqual([]);
+    expect((await getActionByKey('comment:a/post/1'))?.status).toBe('rejected');
   });
 
   it('уважает режим off и auto, кулдаун по автору и do_not_contact', async () => {
@@ -138,7 +160,7 @@ describe('planner.planReplies', () => {
 
 vi.mock('@/llm/tasks/classify-lpr', () => ({
   classifyPosts: vi.fn(async (posts: Post[]) => ({
-    ai: new Map(posts.map((p) => [p.id, { lprScore: p.authorHandle === 'fr' ? 10 : 88, niche: 'эксперт', isFreelancer: p.authorHandle === 'fr', reason: 'mock', model: 'mock', at: NOW }])),
+    ai: new Map(posts.map((p) => [p.id, { lprScore: p.authorHandle === 'fr' ? 10 : 88, commentScore: 85, niche: 'эксперт', isFreelancer: p.authorHandle === 'fr', reason: 'mock', model: 'mock', at: NOW }])),
     usage: { model: 'mock', promptVersion: 1, tokensIn: 10, tokensOut: 5, costUsd: 0.001 },
   })),
 }));

@@ -24,6 +24,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -39,6 +40,35 @@ async function ensureAlarms(): Promise<void> {
   // Дневные метрики — ночью (04:10 по местному времени), чтобы не уводить вкладку, пока Лера работает.
   const daily = await browser.alarms.get(ALARM_DAILY);
   if (!daily) await browser.alarms.create(ALARM_DAILY, { periodInMinutes: 60 * 24, when: nextLocalTime(4, 10) });
+}
+
+/** Одноразовые миграции данных при обновлении расширения (флаг в storage). */
+async function runMigrations(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_commentscore_v1', { fallback: false });
+  if (await flag.getValue()) return;
+  const [{ resetClassificationWithoutRelevance }, { expireAllProposed }] = await Promise.all([import('@/db/repo-posts'), import('@/db/repo-actions')]);
+  const posts = await resetClassificationWithoutRelevance();
+  const actions = await expireAllProposed('переоценка по единому баллу «стоит комментировать»');
+  await flag.setValue(true);
+  log('info', `migration commentscore_v1: ${posts} постов на переоценку, ${actions} предложений снято`);
+  broadcast('actions');
+}
+
+/** v2: снятые системой предложения не должны блокировать повторное предложение поста. */
+async function runMigrationRepropose(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_repropose_v1', { fallback: false });
+  if (await flag.getValue()) return;
+  const [{ resetActionStatus }, { purgeExpired, listActionsByStatus }] = await Promise.all([import('@/db/repo-posts'), import('@/db/repo-actions')]);
+  const purged = await purgeExpired();
+  const live = await listActionsByStatus(['proposed', 'approved', 'queued', 'executing', 'rejected', 'done'], 5000);
+  const keep = new Set(live.map((a) => a.targetPostId).filter((x): x is string => !!x));
+  const reset = await resetActionStatus(keep);
+  await flag.setValue(true);
+  log('info', `migration repropose_v1: удалено ${purged.length} снятых предложений, ${reset} постов возвращено на рассмотрение`);
+  broadcast('actions');
+  broadcast('state');
 }
 
 function nextLocalTime(hour: number, minute: number, now = new Date()): number {

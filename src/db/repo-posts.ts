@@ -88,15 +88,59 @@ export async function setActionStatus(id: string, actionStatus: PostActionStatus
   await tx.done;
 }
 
-/** Кандидаты в комментарии: классифицированы, порог по score, без действия, не старше N дней. */
-export async function listCandidates(minScore: number, maxAgeMs: number, limit: number, now = Date.now()): Promise<Post[]> {
+/** Кандидаты в комментарии: главный порог commentScore, вспомогательные — ЛПР и тема; без действия, не старше N дней. */
+export async function listCandidates(
+  minScore: number,
+  maxAgeMs: number,
+  limit: number,
+  now = Date.now(),
+  minRelevance = 0,
+  minComment = 0,
+): Promise<Post[]> {
   const db = await openDb();
   const all = await db.getAllFromIndex('posts', 'byLprScore', IDBKeyRange.lowerBound(minScore));
   return all
     .filter((p) => p.actionStatus === 'none' && !p.ai?.isFreelancer && p.source !== 'own')
+    .filter((p) => (p.ai?.commentScore ?? 0) >= minComment && (p.ai?.relevance ?? 0) >= minRelevance)
     .filter((p) => (p.postedAt ? now - p.postedAt <= maxAgeMs : now - p.firstSeenAt <= maxAgeMs))
-    .sort((a, b) => (b.ai?.lprScore ?? 0) - (a.ai?.lprScore ?? 0) || b.firstSeenAt - a.firstSeenAt)
+    .sort((a, b) => (b.ai?.commentScore ?? 0) - (a.ai?.commentScore ?? 0) || b.firstSeenAt - a.firstSeenAt)
     .slice(0, limit);
+}
+
+/** Миграция: посты, оценённые старым промтом (без commentScore), отправить на переоценку. Возвращает число. */
+export async function resetClassificationWithoutRelevance(): Promise<number> {
+  const db = await openDb();
+  const tx = db.transaction('posts', 'readwrite');
+  let n = 0;
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    const p = cursor.value as StoredPost;
+    if (p.ai && p.ai.commentScore === undefined && p.actionStatus !== 'commented') {
+      await cursor.update({ ...p, classifiedAt: 0, actionStatus: p.actionStatus === 'proposed' ? 'none' : p.actionStatus } as StoredPost);
+      n++;
+    }
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return n;
+}
+
+/** Вернуть посты в 'none' (кроме прокомментированных) — чтобы планировщик рассмотрел их заново. */
+export async function resetActionStatus(keepIds: Set<string>): Promise<number> {
+  const db = await openDb();
+  const tx = db.transaction('posts', 'readwrite');
+  let n = 0;
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    const p = cursor.value;
+    if ((p.actionStatus === 'skipped' || p.actionStatus === 'proposed') && !keepIds.has(p.id)) {
+      await cursor.update({ ...p, actionStatus: 'none' });
+      n++;
+    }
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return n;
 }
 
 export async function listPostsByAuthor(handle: string): Promise<Post[]> {

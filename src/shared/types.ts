@@ -3,7 +3,12 @@
 export type PostSource = 'keyword' | 'competitor' | 'feed' | 'thread' | 'own' | 'activity';
 
 export interface PostAi {
+  /** 0..100 — главный балл: стоит ли Лере комментировать этот пост (100 — точно да, 0 — точно нет). */
+  commentScore?: number;
   lprScore: number; // 0..100 — насколько автор похож на ЛПР/эксперта-заказчика
+  /** 0..100 — насколько тема поста про продвижение/клиентов/продажи/контент/запуски (есть что сказать по делу). */
+  relevance?: number;
+  topic?: string;
   niche: string;
   isFreelancer: boolean;
   reason: string;

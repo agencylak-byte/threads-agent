@@ -42,7 +42,9 @@ export async function createAction(input: NewAction, now = Date.now()): Promise<
   const db = await openDb();
   const tx = db.transaction('actions', 'readwrite');
   const dup = await tx.store.index('byDedupeKey').get(input.dedupeKey);
-  if (dup) {
+  if (dup && dup.status === 'expired') {
+    await tx.store.delete(dup.id);
+  } else if (dup) {
     await tx.done;
     throw new DuplicateActionError(input.dedupeKey);
   }
@@ -62,9 +64,38 @@ export async function createAction(input: NewAction, now = Date.now()): Promise<
   return action;
 }
 
+export async function getActionByKey(dedupeKey: string): Promise<Action | undefined> {
+  return (await openDb()).getFromIndex('actions', 'byDedupeKey', dedupeKey);
+}
+
+/**
+ * Занят ли ключ. Просроченное/снятое системой предложение (expired) место НЕ занимает —
+ * удаляем его, чтобы пост можно было предложить заново. Отклонённое Лерой (rejected) — занимает.
+ */
 export async function hasActionWithKey(dedupeKey: string): Promise<boolean> {
   const db = await openDb();
-  return Boolean(await db.getFromIndex('actions', 'byDedupeKey', dedupeKey));
+  const existing = await db.getFromIndex('actions', 'byDedupeKey', dedupeKey);
+  if (!existing) return false;
+  if (existing.status === 'expired') {
+    await db.delete('actions', existing.id);
+    return false;
+  }
+  return true;
+}
+
+/** Удалить все expired-действия. Возвращает id постов, у которых они были. */
+export async function purgeExpired(): Promise<string[]> {
+  const db = await openDb();
+  const tx = db.transaction('actions', 'readwrite');
+  const postIds: string[] = [];
+  let cursor = await tx.store.index('byStatus').openCursor('expired');
+  while (cursor) {
+    if (cursor.value.targetPostId) postIds.push(cursor.value.targetPostId);
+    await cursor.delete();
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return postIds;
 }
 
 export async function getAction(id: string): Promise<Action | undefined> {
@@ -128,6 +159,21 @@ export async function expireProposals(ttlMs: number, now = Date.now()): Promise<
       await cursor.update({ ...cursor.value, status: 'expired', decidedAt: now });
       n++;
     }
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return n;
+}
+
+/** Снять с очереди все предложенные (без текста или с текстом) — например, после смены правил отбора. */
+export async function expireAllProposed(reason: string, now = Date.now()): Promise<number> {
+  const db = await openDb();
+  const tx = db.transaction('actions', 'readwrite');
+  let n = 0;
+  let cursor = await tx.store.index('byStatus').openCursor('proposed');
+  while (cursor) {
+    await cursor.update({ ...cursor.value, status: 'expired', rejectReason: reason, decidedAt: now });
+    n++;
     cursor = await cursor.continue();
   }
   await tx.done;
