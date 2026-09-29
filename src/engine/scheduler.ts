@@ -18,9 +18,15 @@ import type { Action, LlmUsage } from '@/shared/types';
 
 let ticking = false;
 let dispatchHook: (() => Promise<void>) | null = null;
+let activityHook: (() => Promise<void>) | null = null;
+let lastActivityAt = 0;
 
 export function setDispatchHook(h: (() => Promise<void>) | null): void {
   dispatchHook = h;
+}
+/** Сбор «Действий» (ответы на наши посты) — для автоответов. */
+export function setActivityHook(h: (() => Promise<void>) | null): void {
+  activityHook = h;
 }
 
 const CLASSIFY_BATCH = 10;
@@ -37,6 +43,11 @@ export async function tick(): Promise<void> {
     if (!canPrepare(engine)) return;
     const apiKey = await apiKeyItem.getValue();
     if (!apiKey) return;
+    const s = await getSettings();
+    if (activityHook && s.autoReplyIntervalMin > 0 && Date.now() - lastActivityAt > s.autoReplyIntervalMin * 60_000) {
+      lastActivityAt = Date.now();
+      await activityHook();
+    }
     await classifyStep();
     await planStep();
     await draftStep();

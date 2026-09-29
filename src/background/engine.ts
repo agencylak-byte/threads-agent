@@ -1,7 +1,7 @@
 import { ALARM_DAILY, ALARM_TICK, TICK_PERIOD_MIN } from '@/shared/constants';
-import { setDispatchHook, tick } from '@/engine/scheduler';
+import { setActivityHook, setDispatchHook, tick } from '@/engine/scheduler';
 import { dispatchOnce } from '@/engine/dispatcher';
-import { isJobRunning } from './jobs';
+import { isJobRunning, runJob } from './jobs';
 import { executeInTab, initAnomalyHandling } from './executor';
 import { dailyMetrics } from './daily';
 import { broadcast } from './state';
@@ -18,6 +18,12 @@ export function initEngine(): void {
     const r = await dispatchOnce(executeInTab);
     if (r === 'executed') broadcast('actions');
   });
+  setActivityHook(async () => {
+    if (isJobRunning()) return;
+    const st = await engineStateItem.getValue();
+    if (st.status !== 'running') return;
+    await runJob({ kind: 'collect-activity' });
+  });
   browser.runtime.onInstalled.addListener(() => {
     // после обновления расширения пересоздаём дневной alarm на ночь (старый мог быть «через 5 минут»)
     void browser.alarms.clear(ALARM_DAILY).then(() => ensureAlarms());
@@ -25,7 +31,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -70,6 +76,29 @@ async function runMigrationRepropose(): Promise<void> {
   log('info', `migration repropose_v1: удалено ${purged.length} снятых предложений, ${reset} постов возвращено на рассмотрение`);
   broadcast('actions');
   broadcast('state');
+}
+
+/** Автоответы под своими постами → автопилот (один раз; Лера попросила 29.09). */
+async function runMigrationAutoReply(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_autoreply_v1', { fallback: false });
+  if (await flag.getValue()) return;
+  const { autonomyItem } = await import('@/shared/settings');
+  const cfg = await autonomyItem.getValue();
+  await autonomyItem.setValue({ ...cfg, 'reply-own-post': 'auto' });
+  await flag.setValue(true);
+  log('info', 'migration autoreply_v1: reply-own-post → auto');
+}
+
+/** Темп отправки по договорённости 29.09: 40–90 с (один раз в сохранённые настройки). */
+async function runMigrationPace(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_pace_v1', { fallback: false });
+  if (await flag.getValue()) return;
+  const { patchSettings } = await import('@/shared/settings');
+  await patchSettings({ minGapSec: [40, 90], sameTypeGapSec: [60, 150], sessionSize: [4, 8], sessionPauseMin: [8, 20] });
+  await flag.setValue(true);
+  log('info', 'migration pace_v1: 40–90 с между отправками');
 }
 
 /** Таймзона → местная (один раз). Лера во Вьетнаме, а окно считалось по Москве. */

@@ -149,12 +149,13 @@ describe('planner.planReplies', () => {
     await upsertPosts([obs('x/post/r1', { source: 'activity', isReplyTo: 'me/post/root', text: 'А как вы считаете окупаемость?' })], NOW);
     await upsertPosts([obs('y/post/r2', { source: 'thread', isReplyTo: 'q/post/root2', text: 'Спорно' })], NOW);
     let created = await planReplies(ctx);
-    expect(created.map((a) => [a.type, a.targetHandle])).toEqual([['reply-own-post', 'x']]);
+    expect(created.map((a) => [a.type, a.targetHandle, a.status])).toEqual([['reply-own-post', 'x', 'queued']]);
     // теперь «мы комментировали» q/post/root2
     await createAction({ type: 'comment-on-stranger', targetHandle: 'q', targetPostId: 'q/post/root2', context: '', dedupeKey: makeDedupeKey('comment-on-stranger', { postId: 'q/post/root2', handle: 'q' }), autonomyMode: 'suggest' });
     created = await planReplies(ctx);
     expect(created.map((a) => [a.type, a.targetHandle])).toEqual([['reply-thread', 'y']]);
-    expect((await listActionsByStatus(['proposed'])).length).toBe(3);
+    // reply-own-post по умолчанию в автопилоте → queued, остальные — proposed
+    expect((await listActionsByStatus(['proposed', 'queued'])).length).toBe(3);
   });
 });
 

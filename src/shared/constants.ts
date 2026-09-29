@@ -36,7 +36,7 @@ export const DEFAULT_LIMITS: Record<ActionType, number> = {
 /** Все действия стартуют в режиме «предложить»; auto включается вручную. */
 export const DEFAULT_AUTONOMY: AutonomyConfig = {
   'comment-on-stranger': 'suggest',
-  'reply-own-post': 'suggest',
+  'reply-own-post': 'auto',
   'reply-thread': 'suggest',
   'dm-first': 'suggest',
   'dm-continue': 'suggest',

@@ -40,12 +40,12 @@ export const SettingsSchema = z.object({
     })
     .default(DEFAULT_LIMITS),
   /** Секунды между любыми записывающими действиями. */
-  minGapSec: range.default([90, 240]),
+  minGapSec: range.default([40, 90]),
   /** Секунды между действиями одного типа. */
-  sameTypeGapSec: range.default([180, 420]),
+  sameTypeGapSec: range.default([60, 150]),
   /** Пачка действий и пауза между пачками (минуты). */
-  sessionSize: range.default([3, 6]),
-  sessionPauseMin: range.default([12, 35]),
+  sessionSize: range.default([4, 8]),
+  sessionPauseMin: range.default([8, 20]),
   workingHours: z.object({ start: z.string(), end: z.string() }).default({ start: '09:30', end: '21:00' }),
   weekendFactor: z.number().min(0).max(1).default(0.5),
   rampUp: z.boolean().default(true),
@@ -54,6 +54,14 @@ export const SettingsSchema = z.object({
   /** Окно и дневные лимиты считаются в этой таймзоне; по умолчанию — местная (у Леры Вьетнам). */
   timezone: z.string().default(localTimezone()),
   collectMaxPosts: z.number().int().min(5).max(500).default(60),
+  /** Сбор по ключам: сколько экранов пролистать на ключ и сколько ключей брать за прогон (по кругу). */
+  collectScreens: z.number().int().min(1).max(30).default(5),
+  collectKeywordsPerRun: z.number().int().min(1).max(12).default(3),
+  keywordCursor: z.number().int().min(0).default(0),
+  /** Автоответы: как часто заглядывать в «Действия» за новыми ответами (минуты); 0 — выключено. */
+  autoReplyIntervalMin: z.number().int().min(0).max(240).default(30),
+  /** Работать в отдельном окне Chrome, чтобы не мешать вкладкам Леры. */
+  dedicatedWindow: z.boolean().default(true),
   collectScrollPauseMs: range.default([1500, 4000]),
   authorCooldownDays: z.number().int().min(0).default(14),
   maxPostAgeDays: z.number().int().min(1).default(7),
@@ -79,6 +87,7 @@ export const questionnaireItem = storage.defineItem<QuestionnaireAnswers | null>
   fallback: null,
 });
 export const workTabItem = storage.defineItem<number | null>('session:workTabId', { fallback: null });
+export const workWindowItem = storage.defineItem<number | null>('session:workWindowId', { fallback: null });
 
 export async function getSettings(): Promise<Settings> {
   const raw = await settingsItem.getValue();

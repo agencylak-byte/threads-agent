@@ -12,6 +12,8 @@ export function Sources() {
   const [lpr, setLpr] = useState(50);
   const [rel, setRel] = useState(40);
   const [cm, setCm] = useState(70);
+  const [screens, setScreens] = useState(5);
+  const [perRun, setPerRun] = useState(3);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -22,13 +24,24 @@ export function Sources() {
     setLpr(s.lprMinScore);
     setRel(s.relevanceMin);
     setCm(s.commentMin);
+    setScreens(s.collectScreens);
+    setPerRun(s.collectKeywordsPerRun);
   }, [s]);
 
   const save = async () => {
     const lines = (v: string) => v.split('\n').map((x) => x.trim().replace(/^@/, '')).filter(Boolean);
     await call(() =>
       request('SET_SETTINGS', {
-        patch: { keywords: lines(kw), competitors: lines(comp), collectMaxPosts: max, lprMinScore: lpr, relevanceMin: rel, commentMin: cm },
+        patch: {
+          keywords: lines(kw),
+          competitors: lines(comp),
+          collectMaxPosts: max,
+          lprMinScore: lpr,
+          relevanceMin: rel,
+          commentMin: cm,
+          collectScreens: screens,
+          collectKeywordsPerRun: perRun,
+        },
       }),
     );
     setSaved(true);
@@ -42,6 +55,17 @@ export function Sources() {
       <textarea rows={8} value={kw} onInput={(e) => setKw((e.target as HTMLTextAreaElement).value)} />
       <label>Конкуренты (handle без @)</label>
       <textarea rows={6} value={comp} onInput={(e) => setComp((e.target as HTMLTextAreaElement).value)} />
+      <div class="row">
+        <div style="flex:1">
+          <label>Экранов на ключ</label>
+          <input type="number" min={1} max={30} value={screens} onInput={(e) => setScreens(Number((e.target as HTMLInputElement).value))} />
+        </div>
+        <div style="flex:1">
+          <label>Ключей за прогон</label>
+          <input type="number" min={1} max={12} value={perRun} onInput={(e) => setPerRun(Number((e.target as HTMLInputElement).value))} />
+        </div>
+      </div>
+      <p class="small muted">«Собрать свежее по всем ключам» берёт следующие {perRun} ключа по кругу и листает по {screens} экранов на каждый.</p>
       <label>Максимум постов за один сбор</label>
       <input type="number" min={5} max={500} value={max} onInput={(e) => setMax(Number((e.target as HTMLInputElement).value))} />
       <h2>Отбор постов для комментариев</h2>

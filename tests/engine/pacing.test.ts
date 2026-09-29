@@ -39,7 +39,7 @@ describe('pacing: время и лимиты', () => {
 });
 
 describe('pacing: checkPacing', () => {
-  const s = { ...DEFAULT_SETTINGS, rampUp: false, timezone: 'Europe/Moscow' };
+  const s = { ...DEFAULT_SETTINGS, rampUp: false, timezone: 'Europe/Moscow', minGapSec: [90, 240] as [number, number], sameTypeGapSec: [180, 420] as [number, number], sessionSize: [3, 6] as [number, number], sessionPauseMin: [12, 35] as [number, number] };
   it('вне окна — ждать начала окна', () => {
     const v = checkPacing({ settings: s, type: 'comment-on-stranger', now: FRI_2330_MSK, todayExecuted: [], rng: () => 0 });
     expect(v.ok).toBe(false);

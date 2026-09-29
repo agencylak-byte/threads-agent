@@ -97,8 +97,11 @@ export class Collector {
     this.startPassive(params.source, params.sourceDetail);
     let idle = 0;
     let lastCount = 0;
-    while (!this.stopped && this.seen.size < params.maxPosts && idle < 4) {
-      await scrollBy(Math.round(window.innerHeight * (0.6 + Math.random() * 0.5)));
+    let screens = 0;
+    const maxScreens = params.maxScreens ?? Infinity;
+    while (!this.stopped && this.seen.size < params.maxPosts && idle < 4 && screens < maxScreens) {
+      screens++;
+      await scrollBy(Math.round(window.innerHeight * (0.85 + Math.random() * 0.3)));
       await jitter(params.scrollPauseMs);
       this.scan();
       if (this.seen.size === lastCount) idle += atPageBottom() ? 2 : 1;

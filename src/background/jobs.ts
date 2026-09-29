@@ -1,5 +1,5 @@
 import { URLS } from '@/content/selectors';
-import { getSettings, selfHandleItem } from '@/shared/settings';
+import { getSettings, patchSettings, selfHandleItem } from '@/shared/settings';
 import { log } from '@/shared/log';
 import type { CollectParams, ContentToSw, JobRequest } from '@/shared/messages';
 import { getWorkTab, navigateWorkTab } from './tabs';
@@ -44,20 +44,35 @@ export async function runJob(job: JobRequest): Promise<{ ok: boolean; error?: st
       case 'collect-keyword': {
         const kw = job.param?.trim();
         if (!kw) throw new Error('Не задано ключевое слово');
-        const n = await collect(URLS.search(kw, true), { ...base, mode: 'search', source: 'keyword', sourceDetail: kw });
+        const n = await collect(URLS.search(kw, true), { ...base, mode: 'search', source: 'keyword', sourceDetail: kw, maxScreens: s.collectScreens });
         log('info', `collect-keyword «${kw}»: ${n} постов`);
         break;
       }
       case 'collect-all-keywords': {
+        // по кругу: N ключей за прогон, по M экранов на ключ; курсор хранится в настройках
         let total = 0;
-        for (const kw of s.keywords.slice(0, 12)) {
+        const kws = s.keywords;
+        if (!kws.length) throw new Error('Список ключевых слов пуст');
+        const n = Math.min(s.collectKeywordsPerRun, kws.length);
+        let cursor = s.keywordCursor % kws.length;
+        for (let i = 0; i < n; i++) {
           if (stopRequested) break;
+          const kw = kws[cursor]!;
+          cursor = (cursor + 1) % kws.length;
           setCurrentJob({ kind: 'collect-all-keywords', param: kw });
-          const n = await collect(URLS.search(kw, true), { ...base, mode: 'search', source: 'keyword', sourceDetail: kw, maxPosts: Math.min(s.collectMaxPosts, 40) });
-          total += n;
+          const got = await collect(URLS.search(kw, true), {
+            ...base,
+            mode: 'search',
+            source: 'keyword',
+            sourceDetail: kw,
+            maxScreens: s.collectScreens,
+            maxPosts: s.collectMaxPosts,
+          });
+          total += got;
           await new Promise((r) => setTimeout(r, 3000 + Math.random() * 4000));
         }
-        log('info', `collect-all-keywords: ${total} постов по ${Math.min(s.keywords.length, 12)} ключам`);
+        await patchSettings({ keywordCursor: cursor });
+        log('info', `collect-all-keywords: ${total} постов, ${n} ключей по ${s.collectScreens} экранов; следующий ключ — «${kws[cursor]}»`);
         break;
       }
       case 'collect-feed': {

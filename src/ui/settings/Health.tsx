@@ -23,7 +23,10 @@ export function Health() {
             </button>
           )}
         </div>
-        <p class="small muted">В режиме «предложить» движок только классифицирует посты и готовит черновики. Отправка — по вашему клику в очереди.</p>
+        <div class="row" style="margin-top:8px">
+          <button onClick={() => call(() => request('OPEN_WORK_WINDOW', {}))}>Открыть рабочее окно</button>
+        </div>
+        <p class="small muted">Расширение работает в отдельном окне Chrome с вкладкой threads.com. Ваши вкладки оно не трогает. Окно не сворачивайте.</p>
       </div>
 
       {s && (

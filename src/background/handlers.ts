@@ -108,6 +108,16 @@ export function registerBaseHandlers(): void {
     return { profile };
   });
 
+  registerHandler('OPEN_WORK_WINDOW', async () => {
+    try {
+      const { openWorkWindow } = await import('./tabs');
+      await openWorkWindow();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
   registerHandler('OPEN_URL', async ({ url }) => {
     await browser.tabs.create({ url, active: true });
     return { ok: true };

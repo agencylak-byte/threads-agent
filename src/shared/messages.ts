@@ -25,6 +25,8 @@ export interface CollectParams {
   scrollPauseMs: [number, number];
   /** followers: сколько handle'ов собрать. */
   maxHandles?: number;
+  /** search/feed: сколько экранов пролистать (если задано — главнее maxPosts). */
+  maxScreens?: number;
 }
 
 export type ContentToSw =
@@ -103,6 +105,7 @@ export interface UiRequests {
   LIST_VOICE_SAMPLES: { req: Record<string, never>; res: { handle: string; posts: Array<{ id: string; text: string; postedAt?: number }> } };
   GENERATE_POST: { req: { topic?: string }; res: { ok: boolean; error?: string } };
   OPEN_URL: { req: { url: string }; res: { ok: boolean } };
+  OPEN_WORK_WINDOW: { req: Record<string, never>; res: { ok: boolean; error?: string } };
 }
 
 export type UiRequestType = keyof UiRequests;

@@ -1,4 +1,4 @@
-import { workTabItem } from '@/shared/settings';
+import { getSettings, workTabItem, workWindowItem } from '@/shared/settings';
 import { THREADS_ORIGIN } from '@/shared/constants';
 import { sendToTab, waitForMessage, waitForPort } from './ports';
 import type { ContentToSw } from '@/shared/messages';
@@ -10,6 +10,8 @@ function isThreadsUrl(url?: string): boolean {
 }
 
 export async function getWorkTab(create = true): Promise<number> {
+  const settings = await getSettings();
+  if (settings.dedicatedWindow) return getDedicatedWorkTab(create);
   // Если пользователь сейчас смотрит на threads.com — работаем с этой вкладкой (у фоновой вкладки лента не отрисована).
   const [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
   if (active?.id !== undefined && isThreadsUrl(active.url)) {
@@ -37,6 +39,39 @@ export async function getWorkTab(create = true): Promise<number> {
   if (created.id === undefined) throw new Error('Не удалось создать вкладку');
   await workTabItem.setValue(created.id);
   return created.id;
+}
+
+/**
+ * Отдельное окно Chrome под расширение: одна вкладка threads.com, которую двигаем мы.
+ * Лера работает в своём окне и панели; это окно можно отодвинуть, но не сворачивать (свёрнутое Chrome не рисует).
+ */
+async function getDedicatedWorkTab(create: boolean): Promise<number> {
+  const savedWin = await workWindowItem.getValue();
+  if (savedWin !== null) {
+    try {
+      const w = await browser.windows.get(savedWin, { populate: true });
+      const tab = w.tabs?.find((t) => isThreadsUrl(t.url)) ?? w.tabs?.[0];
+      if (tab?.id !== undefined) {
+        if (!isThreadsUrl(tab.url)) await browser.tabs.update(tab.id, { url: THREADS_ORIGIN + '/' });
+        await workTabItem.setValue(tab.id);
+        if (w.state === 'minimized') await browser.windows.update(savedWin, { state: 'normal' });
+        return tab.id;
+      }
+    } catch {
+      // окно закрыто
+    }
+  }
+  if (!create) throw new Error('Рабочее окно закрыто — нажмите «Открыть рабочее окно» в «Здоровье»');
+  const w = await browser.windows.create({ url: THREADS_ORIGIN + '/', type: 'normal', width: 960, height: 900, left: 40, top: 40, focused: false });
+  const tab = w?.tabs?.[0];
+  if (!w || w.id === undefined || tab?.id === undefined) throw new Error('Не удалось открыть рабочее окно');
+  await workWindowItem.setValue(w.id);
+  await workTabItem.setValue(tab.id);
+  return tab.id;
+}
+
+export async function openWorkWindow(): Promise<number> {
+  return getDedicatedWorkTab(true);
 }
 
 function samePage(a: string, b: string): boolean {

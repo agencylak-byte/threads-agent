@@ -13,6 +13,8 @@ export function Limits() {
   const [gap, setGap] = useState<[number, number]>([90, 240]);
   const [rampUp, setRampUp] = useState(true);
   const [tz, setTz] = useState('Europe/Moscow');
+  const [autoReply, setAutoReply] = useState(30);
+  const [dedicated, setDedicated] = useState(true);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -22,11 +24,17 @@ export function Limits() {
     setGap([...s.minGapSec]);
     setRampUp(s.rampUp);
     setTz(s.timezone);
+    setAutoReply(s.autoReplyIntervalMin);
+    setDedicated(s.dedicatedWindow);
   }, [s]);
 
   const save = async () => {
     if (!limits) return;
-    await call(() => request('SET_SETTINGS', { patch: { limits, workingHours: hours, minGapSec: gap, rampUp, timezone: tz } }));
+    await call(() =>
+      request('SET_SETTINGS', {
+        patch: { limits, workingHours: hours, minGapSec: gap, rampUp, timezone: tz, autoReplyIntervalMin: autoReply, dedicatedWindow: dedicated },
+      }),
+    );
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -67,12 +75,23 @@ export function Limits() {
         <span>—</span>
         <input type="time" value={hours.end} onInput={(e) => setHours({ ...hours, end: (e.target as HTMLInputElement).value })} style="width:110px" />
       </div>
-      <h2>Пауза между действиями, сек</h2>
+      <h2>Пауза между отправками, сек</h2>
       <div class="row">
-        <input type="number" min={30} style="width:90px" value={gap[0]} onInput={(e) => setGap([Number((e.target as HTMLInputElement).value), gap[1]])} />
+        <input type="number" min={0} style="width:90px" value={gap[0]} onInput={(e) => setGap([Number((e.target as HTMLInputElement).value), gap[1]])} />
         <span>—</span>
-        <input type="number" min={60} style="width:90px" value={gap[1]} onInput={(e) => setGap([gap[0], Number((e.target as HTMLInputElement).value)])} />
+        <input type="number" min={0} style="width:90px" value={gap[1]} onInput={(e) => setGap([gap[0], Number((e.target as HTMLInputElement).value)])} />
       </div>
+      {gap[0] < 30 && <div class="banner warn small">Меньше 30 секунд между комментариями — темп бота. Threads за такое даёт «Действие заблокировано» на сутки. Рекомендую 40–90.</div>}
+      <h2>Автоответы под своими постами</h2>
+      <label>Проверять новые ответы каждые N минут (0 — выключить)</label>
+      <input type="number" min={0} max={240} value={autoReply} onInput={(e) => setAutoReply(Number((e.target as HTMLInputElement).value))} />
+      <p class="small muted">Ответы на комментарии под вашими постами уходят автоматически, если выше для «Ответ под своим постом» стоит «автопилот».</p>
+      <h2>Отдельное окно</h2>
+      <label class="row" style="font-weight:normal">
+        <input type="checkbox" style="width:auto" checked={dedicated} onChange={(e) => setDedicated((e.target as HTMLInputElement).checked)} />
+        Работать в отдельном окне Chrome (ваши вкладки не трогаются)
+      </label>
+      <p class="small muted">Окно можно отодвинуть в сторону, но не сворачивать: свёрнутое окно Chrome не рисует страницу. Открыть заново — в «Здоровье».</p>
       <label class="row" style="font-weight:normal;margin-top:10px">
         <input type="checkbox" style="width:auto" checked={rampUp} onChange={(e) => setRampUp((e.target as HTMLInputElement).checked)} />
         Плавный разгон: первые 7 дней лимиты ×0.4, дни 8–14 ×0.7
