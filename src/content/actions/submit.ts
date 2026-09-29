@@ -20,9 +20,11 @@ function labelOf(el: Element): string {
 function isSubmitLike(btn: HTMLElement, editor?: HTMLElement | null): boolean {
   // кнопки «Ответ»/«Нравится» на карточках постов — со счётчиком (<span dir="auto">) и в чужой карточке; кнопка отправки — без счётчика,
   // рядом с редактором (поле ответа иногда вложено в карточку корневого поста — тогда карточка та же)
-  const btnCard = btn.closest('[data-pressable-container]');
-  const editorCard = editor?.closest('[data-pressable-container]') ?? null;
-  if (btnCard && btnCard !== editorCard) return false;
+  if (editor) {
+    const btnCard = btn.closest('[data-pressable-container]');
+    const editorCard = editor.closest('[data-pressable-container]');
+    if (btnCard && btnCard !== editorCard) return false;
+  }
   if (btn.querySelector('span[dir="auto"]')) return false;
   const byLabel = labelOf(btn);
   if (SUBMIT_LABELS.includes(byLabel)) return true;
