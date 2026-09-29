@@ -29,7 +29,7 @@ export const SettingsSchema = z.object({
   /** В автопилоте (без одобрения) комментируем только посты с баллом не ниже этого. */
   autoCommentMin: z.number().min(0).max(100).default(80),
   /** Автопостинг: постов в день (0 — выключено), темы по кругу. */
-  autoPostsPerDay: z.number().int().min(0).max(10).default(3),
+  autoPostsPerDay: z.number().int().min(0).max(10).default(5),
   postTopics: z.array(z.string()).default([
     'подрядчик показывает охваты, а заявок нет: где на самом деле теряются заявки',
     'что я автоматизировала в агентстве с помощью ИИ-агентов и что при этом сломалось',
