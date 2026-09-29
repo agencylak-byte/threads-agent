@@ -1,0 +1,6 @@
+node_modules/
+build/
+.output/
+.wxt/
+tests/fixtures/threads/raw/
+.DS_Store
