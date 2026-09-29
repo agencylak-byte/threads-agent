@@ -22,13 +22,14 @@ export async function planComments(ctx: PlanContext, limit = 10): Promise<Action
   const status = initialStatus(mode);
   if (!status) return [];
   const now = ctx.now ?? Date.now();
+  const minComment = mode === 'auto' ? Math.max(ctx.settings.commentMin, ctx.settings.autoCommentMin) : ctx.settings.commentMin;
   const candidates = await listCandidates(
     ctx.settings.lprMinScore,
     ctx.settings.maxPostAgeDays * 86_400_000,
     limit * 3,
     now,
     ctx.settings.relevanceMin,
-    ctx.settings.commentMin,
+    minComment,
   );
   const created: Action[] = [];
   for (const post of candidates) {

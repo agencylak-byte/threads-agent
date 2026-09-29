@@ -1,5 +1,5 @@
 import { ALARM_DAILY, ALARM_TICK, TICK_PERIOD_MIN } from '@/shared/constants';
-import { setActivityHook, setDispatchHook, tick } from '@/engine/scheduler';
+import { setActivityHook, setCollectHook, setDispatchHook, tick } from '@/engine/scheduler';
 import { dispatchOnce } from '@/engine/dispatcher';
 import { isJobRunning, runJob } from './jobs';
 import { executeInTab, initAnomalyHandling } from './executor';
@@ -24,6 +24,10 @@ export function initEngine(): void {
     if (st.status !== 'running') return;
     await runJob({ kind: 'collect-activity' });
   });
+  setCollectHook(async () => {
+    if (isJobRunning()) return;
+    await runJob({ kind: 'collect-all-keywords' });
+  });
   browser.runtime.onInstalled.addListener(() => {
     // после обновления расширения пересоздаём дневной alarm на ночь (старый мог быть «через 5 минут»)
     void browser.alarms.clear(ALARM_DAILY).then(() => ensureAlarms());
@@ -31,7 +35,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -88,6 +92,17 @@ async function runMigrationAutoReply(): Promise<void> {
   await autonomyItem.setValue({ ...cfg, 'reply-own-post': 'auto' });
   await flag.setValue(true);
   log('info', 'migration autoreply_v1: reply-own-post → auto');
+}
+
+/** Комментарии чужим → автопилот (просьба Леры 29.09): предложенные с баллом ≥ autoCommentMin — в очередь. */
+async function runMigrationAutopilotComments(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_autopilot_comments_v1', { fallback: false });
+  if (await flag.getValue()) return;
+  const { dispatchUiRequest } = await import('./handlers');
+  await dispatchUiRequest({ type: 'SET_AUTONOMY', actionType: 'comment-on-stranger', mode: 'auto' });
+  await flag.setValue(true);
+  log('info', 'migration autopilot_comments_v1: comment-on-stranger → auto');
 }
 
 /** Темп отправки по договорённости 29.09: 40–90 с (один раз в сохранённые настройки). */

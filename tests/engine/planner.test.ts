@@ -130,6 +130,17 @@ describe('planner.planComments', () => {
     expect((await getActionByKey('comment:a/post/1'))?.status).toBe('rejected');
   });
 
+  it('в автопилоте берёт только посты с баллом ≥ autoCommentMin', async () => {
+    await upsertPosts([obs('p/post/1'), obs('q/post/2')], NOW - 1000);
+    await markClassified('p/post/1', { lprScore: 90, commentScore: 75, relevance: 80, niche: 'x', isFreelancer: false, reason: '', model: 'm', at: NOW });
+    await markClassified('q/post/2', { lprScore: 90, commentScore: 85, relevance: 80, niche: 'x', isFreelancer: false, reason: '', model: 'm', at: NOW });
+    const created = await planComments({ ...ctx, autonomy: { ...DEFAULT_AUTONOMY, 'comment-on-stranger': 'auto' } });
+    expect(created.map((a) => [a.targetHandle, a.status])).toEqual([['q', 'queued']]);
+    // в ручном режиме 75 проходит основной порог 70
+    const manual = await planComments(ctx);
+    expect(manual.map((a) => a.targetHandle)).toEqual(['p']);
+  });
+
   it('уважает режим off и auto, кулдаун по автору и do_not_contact', async () => {
     await classified('a/post/1', 90);
     expect(await planComments({ ...ctx, autonomy: { ...DEFAULT_AUTONOMY, 'comment-on-stranger': 'off' } })).toEqual([]);

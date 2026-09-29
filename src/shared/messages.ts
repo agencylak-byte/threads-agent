@@ -86,7 +86,7 @@ export interface UiRequests {
   REJECT: { req: { actionId: string; reason?: string; notMyVoice?: boolean }; res: { ok: boolean } };
   REGENERATE: { req: { actionId: string; hint?: string }; res: { ok: boolean; draftText?: string; error?: string } };
   RETRY_ACTION: { req: { actionId: string }; res: { ok: boolean } };
-  SET_AUTONOMY: { req: { type: ActionType; mode: AutonomyMode }; res: { ok: boolean } };
+  SET_AUTONOMY: { req: { actionType: ActionType; mode: AutonomyMode }; res: { ok: boolean } };
   GET_SETTINGS: { req: Record<string, never>; res: { settings: Settings; hasApiKey: boolean } };
   SET_SETTINGS: { req: { patch: Partial<Settings>; apiKey?: string }; res: { settings: Settings } };
   START_JOB: { req: JobRequest; res: { ok: boolean; error?: string } };

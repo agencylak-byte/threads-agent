@@ -26,6 +26,10 @@ export const SettingsSchema = z.object({
   competitors: z.array(z.string()).default(competitorsSeed.competitors),
   /** Главный порог: балл «стоит комментировать» (0–100). */
   commentMin: z.number().min(0).max(100).default(70),
+  /** В автопилоте (без одобрения) комментируем только посты с баллом не ниже этого. */
+  autoCommentMin: z.number().min(0).max(100).default(80),
+  /** Автосбор по ключам раз в N минут (0 — только вручную). */
+  autoCollectIntervalMin: z.number().int().min(0).max(1440).default(180),
   /** Вспомогательные пороги (автор похож на клиента; пост по теме). */
   lprMinScore: z.number().min(0).max(100).default(50),
   relevanceMin: z.number().min(0).max(100).default(40),

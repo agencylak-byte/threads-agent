@@ -43,7 +43,7 @@ export function Limits() {
     if (mode === 'auto' && AUTO_NEEDS_CONFIRM.includes(type)) {
       if (!confirm(`Включить автопилот для «${ACTION_TYPE_LABELS[type]}»? Это будет отправляться без вашего подтверждения.`)) return;
     }
-    await call(() => request('SET_AUTONOMY', { type, mode }));
+    await call(() => request('SET_AUTONOMY', { actionType: type, mode }));
     await refreshSettings();
   };
 

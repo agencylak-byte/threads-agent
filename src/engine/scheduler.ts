@@ -20,6 +20,11 @@ let ticking = false;
 let dispatchHook: (() => Promise<void>) | null = null;
 let activityHook: (() => Promise<void>) | null = null;
 let lastActivityAt = 0;
+let collectHook: (() => Promise<void>) | null = null;
+let lastCollectAt = 0;
+export function setCollectHook(h: (() => Promise<void>) | null): void {
+  collectHook = h;
+}
 
 export function setDispatchHook(h: (() => Promise<void>) | null): void {
   dispatchHook = h;
@@ -47,6 +52,10 @@ export async function tick(): Promise<void> {
     if (activityHook && s.autoReplyIntervalMin > 0 && Date.now() - lastActivityAt > s.autoReplyIntervalMin * 60_000) {
       lastActivityAt = Date.now();
       await activityHook();
+    }
+    if (collectHook && s.autoCollectIntervalMin > 0 && Date.now() - lastCollectAt > s.autoCollectIntervalMin * 60_000 && engine.status === 'running') {
+      lastCollectAt = Date.now();
+      await collectHook();
     }
     await classifyStep();
     await planStep();

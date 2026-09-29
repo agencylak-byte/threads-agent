@@ -47,10 +47,33 @@ export function registerBaseHandlers(): void {
     return { settings };
   });
 
-  registerHandler('SET_AUTONOMY', async ({ type, mode }) => {
+  registerHandler('SET_AUTONOMY', async ({ actionType: type, mode }) => {
     const cfg = await autonomyItem.getValue();
     await autonomyItem.setValue({ ...cfg, [type]: mode });
+    if (mode === 'auto') {
+      // уже предложенные этого типа: с достаточным баллом — в очередь отправки, остальные — снять
+      const { getPost } = await import('@/db/repo-posts');
+      const s = await getSettings();
+      let queued = 0;
+      let dropped = 0;
+      for (const a of await listActionsByStatus(['proposed'], 500)) {
+        if (a.type !== type) continue;
+        const post = a.targetPostId ? await getPost(a.targetPostId) : undefined;
+        const score = post?.ai?.commentScore ?? 100;
+        if (type !== 'comment-on-stranger' || score >= Math.max(s.commentMin, s.autoCommentMin)) {
+          await updateAction(a.id, { status: 'queued', decidedAt: Date.now(), autonomyMode: 'auto' });
+          queued++;
+        } else {
+          await updateAction(a.id, { status: 'expired', rejectReason: `автопилот: балл ${score} ниже порога ${s.autoCommentMin}`, decidedAt: Date.now() });
+          dropped++;
+        }
+      }
+      const { log } = await import('@/shared/log');
+      log('info', `автопилот ${type}: ${queued} в очередь отправки, ${dropped} снято`);
+      void import('./engine').then((m) => m.runTick());
+    }
     broadcast('settings');
+    broadcast('actions');
     return { ok: true };
   });
 

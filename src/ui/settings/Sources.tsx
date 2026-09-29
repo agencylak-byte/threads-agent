@@ -13,6 +13,8 @@ export function Sources() {
   const [rel, setRel] = useState(40);
   const [cm, setCm] = useState(70);
   const [screens, setScreens] = useState(5);
+  const [autoMin, setAutoMin] = useState(80);
+  const [autoCollect, setAutoCollect] = useState(180);
   const [perRun, setPerRun] = useState(3);
   const [saved, setSaved] = useState(false);
 
@@ -26,6 +28,8 @@ export function Sources() {
     setCm(s.commentMin);
     setScreens(s.collectScreens);
     setPerRun(s.collectKeywordsPerRun);
+    setAutoMin(s.autoCommentMin);
+    setAutoCollect(s.autoCollectIntervalMin);
   }, [s]);
 
   const save = async () => {
@@ -41,6 +45,8 @@ export function Sources() {
           commentMin: cm,
           collectScreens: screens,
           collectKeywordsPerRun: perRun,
+          autoCommentMin: autoMin,
+          autoCollectIntervalMin: autoCollect,
         },
       }),
     );
@@ -66,12 +72,17 @@ export function Sources() {
         </div>
       </div>
       <p class="small muted">«Собрать свежее по всем ключам» берёт следующие {perRun} ключа по кругу и листает по {screens} экранов на каждый.</p>
+      <label>Автосбор по ключам каждые N минут (0 — только вручную)</label>
+      <input type="number" min={0} max={1440} value={autoCollect} onInput={(e) => setAutoCollect(Number((e.target as HTMLInputElement).value))} />
       <label>Максимум постов за один сбор</label>
       <input type="number" min={5} max={500} value={max} onInput={(e) => setMax(Number((e.target as HTMLInputElement).value))} />
       <h2>Отбор постов для комментариев</h2>
       <label>Балл «стоит комментировать» (0 — точно нет, 100 — точно да), минимум: {cm}</label>
       <input type="range" min={0} max={100} step={5} value={cm} onInput={(e) => setCm(Number((e.target as HTMLInputElement).value))} />
       <p class="small muted">Главный порог. Модель ставит балл каждому посту после сбора; ниже порога — не предлагаем. Много мусора — поднимите до 80.</p>
+      <label>В автопилоте отправлять только с баллом от: {autoMin}</label>
+      <input type="range" min={0} max={100} step={5} value={autoMin} onInput={(e) => setAutoMin(Number((e.target as HTMLInputElement).value))} />
+      <p class="small muted">Строже основного порога: когда никто не проверяет, лучше пропустить спорное.</p>
       <details>
         <summary class="small muted">Вспомогательные пороги</summary>
         <label>Автор похож на клиента, минимум: {lpr}</label>
