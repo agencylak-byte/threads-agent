@@ -30,7 +30,7 @@ export const DEFAULT_LIMITS: Record<ActionType, number> = {
   'reply-thread': 20,
   'dm-first': 10,
   'dm-continue': 30,
-  'publish-post': 3,
+  'publish-post': 10,
 };
 
 /** Все действия стартуют в режиме «предложить»; auto включается вручную. */

@@ -59,7 +59,9 @@ export function limitFactor(ts: number, s: Settings): number {
 }
 
 export function dailyLimit(type: ActionType, ts: number, s: Settings): number {
-  return Math.max(0, Math.round(s.limits[type] * limitFactor(ts, s)));
+  // собственные посты и ответы под ними — не «холодная» активность, разгон к ним не применяем
+  const factor = type === 'publish-post' || type === 'reply-own-post' ? 1 : limitFactor(ts, s);
+  return Math.max(0, Math.round(s.limits[type] * factor));
 }
 
 function rand(rng: () => number, [min, max]: readonly [number, number]): number {

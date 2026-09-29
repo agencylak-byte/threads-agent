@@ -102,6 +102,9 @@ async function runMigrationAutopilotComments(): Promise<void> {
   const { dispatchUiRequest } = await import('./handlers');
   await dispatchUiRequest({ type: 'SET_AUTONOMY', actionType: 'comment-on-stranger', mode: 'auto' });
   await dispatchUiRequest({ type: 'SET_AUTONOMY', actionType: 'publish-post', mode: 'auto' });
+  const { patchSettings, getSettings } = await import('@/shared/settings');
+  const cur = await getSettings();
+  await patchSettings({ autoPostsPerDay: Math.max(cur.autoPostsPerDay, 3), limits: { ...cur.limits, 'publish-post': Math.max(cur.limits['publish-post'], 10) } });
   await flag.setValue(true);
   log('info', 'migration autopilot_comments_v1: comment-on-stranger → auto');
 }
