@@ -17,8 +17,13 @@ function labelOf(el: Element): string {
   return normalized(el.getAttribute('aria-label')) || normalized(svg?.getAttribute('aria-label')) || normalized(svg?.getAttribute('title')) || normalized(svg?.querySelector('title')?.textContent);
 }
 
-function isSubmitLike(btn: HTMLElement): boolean {
-  if (btn.closest('[data-pressable-container]')) return false; // кнопки «Ответ»/«Нравится» на карточках постов — не наши
+function isSubmitLike(btn: HTMLElement, editor?: HTMLElement | null): boolean {
+  // кнопки «Ответ»/«Нравится» на карточках постов — со счётчиком (<span dir="auto">) и в чужой карточке; кнопка отправки — без счётчика,
+  // рядом с редактором (поле ответа иногда вложено в карточку корневого поста — тогда карточка та же)
+  const btnCard = btn.closest('[data-pressable-container]');
+  const editorCard = editor?.closest('[data-pressable-container]') ?? null;
+  if (btnCard && btnCard !== editorCard) return false;
+  if (btn.querySelector('span[dir="auto"]')) return false;
   const byLabel = labelOf(btn);
   if (SUBMIT_LABELS.includes(byLabel)) return true;
   const text = normalized(btn.textContent);
@@ -29,7 +34,7 @@ function isSubmitLike(btn: HTMLElement): boolean {
 export function findSubmitFor(editor: HTMLElement): HTMLElement | null {
   let scope: HTMLElement | null = editor.parentElement;
   for (let depth = 0; scope && depth < 14; depth++) {
-    const buttons = Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button')).filter((b) => !b.contains(editor) && isSubmitLike(b));
+    const buttons = Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button')).filter((b) => !b.contains(editor) && isSubmitLike(b, editor));
     if (buttons.length) {
       // предпочитаем кнопку ПОСЛЕ редактора в DOM-порядке и без вложенных совпадений
       const after = buttons.filter((b) => editor.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -46,7 +51,7 @@ export function findSubmitFor(editor: HTMLElement): HTMLElement | null {
 export function findSubmitButton(root: ParentNode = document): HTMLElement | null {
   const dialog = root.querySelector('div[role="dialog"]');
   const scope = dialog ?? root;
-  const candidates = Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button')).filter(isSubmitLike);
+  const candidates = Array.from(scope.querySelectorAll<HTMLElement>('div[role="button"], button')).filter((b) => isSubmitLike(b));
   return candidates.find((b) => !candidates.some((o) => o !== b && b.contains(o))) ?? null;
 }
 
