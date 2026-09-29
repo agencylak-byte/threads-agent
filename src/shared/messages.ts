@@ -67,6 +67,8 @@ export interface StateSnapshot {
   counts: { posts: number; authors: number; proposed: number; queued: number; done: number; events: number };
   /** Воронка отбора: почему очередь такая, какая есть. */
   funnel: { unclassified: number; classified: number; lprPass: number; candidates: number; skipped: number; commented: number };
+  /** Почему сейчас не отправляется (или что ждём). */
+  dispatchStatus: string;
   currentJob: JobRequest | null;
   lastSelftest?: { page: string; broken: string[]; at: number };
   todayCost: number;

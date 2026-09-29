@@ -11,6 +11,14 @@ import competitorsSeed from '@/profile/seed/competitors.json';
 
 const range = z.tuple([z.number().nonnegative(), z.number().nonnegative()]);
 
+export function localTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+  } catch {
+    return 'Europe/Moscow';
+  }
+}
+
 export const SettingsSchema = z.object({
   model: z.string().default(DEFAULT_MODEL),
   fallbackModel: z.string().default(''),
@@ -43,7 +51,8 @@ export const SettingsSchema = z.object({
   rampUp: z.boolean().default(true),
   /** Когда движок впервые запущен — точка отсчёта ramp-up. */
   rampStartAt: z.number().optional(),
-  timezone: z.string().default('Europe/Moscow'),
+  /** Окно и дневные лимиты считаются в этой таймзоне; по умолчанию — местная (у Леры Вьетнам). */
+  timezone: z.string().default(localTimezone()),
   collectMaxPosts: z.number().int().min(5).max(500).default(60),
   collectScrollPauseMs: range.default([1500, 4000]),
   authorCooldownDays: z.number().int().min(0).default(14),

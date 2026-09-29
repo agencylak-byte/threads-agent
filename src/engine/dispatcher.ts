@@ -7,7 +7,7 @@ import { engineStateItem, getSettings, patchSettings, selfHandleItem } from '@/s
 import { RETRY_DELAY_MS } from '@/shared/constants';
 import { log } from '@/shared/log';
 import { canDispatch } from './autonomy';
-import { checkPacing } from './pacing';
+import { checkPacing, isWorkingHours } from './pacing';
 import { resumeIfDue } from './anomaly-policy';
 import type { Action, ActionType } from '@/shared/types';
 
@@ -36,10 +36,12 @@ function dayBounds(now: number, timezone: string): [number, number] {
 
 export async function dispatchOnce(execute: Executor, now = Date.now()): Promise<'idle' | 'executed' | 'deferred' | 'blocked'> {
   let engine = resumeIfDue(await engineStateItem.getValue(), now);
+  const settings = await getSettings();
+  // «спал» вне рабочих часов — окно открылось, просыпаемся
+  if (engine.status === 'sleeping' && isWorkingHours(now, settings)) engine = { ...engine, status: 'running' };
   await engineStateItem.setValue(engine);
   if (!canDispatch(engine, now)) return 'blocked';
 
-  const settings = await getSettings();
   if (settings.rampUp && !settings.rampStartAt) await patchSettings({ rampStartAt: now });
 
   const queued = (await listActionsByStatus(['queued'], 100))

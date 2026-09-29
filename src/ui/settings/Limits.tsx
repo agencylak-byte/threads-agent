@@ -12,6 +12,7 @@ export function Limits() {
   const [hours, setHours] = useState({ start: '09:30', end: '21:00' });
   const [gap, setGap] = useState<[number, number]>([90, 240]);
   const [rampUp, setRampUp] = useState(true);
+  const [tz, setTz] = useState('Europe/Moscow');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -20,11 +21,12 @@ export function Limits() {
     setHours({ ...s.workingHours });
     setGap([...s.minGapSec]);
     setRampUp(s.rampUp);
+    setTz(s.timezone);
   }, [s]);
 
   const save = async () => {
     if (!limits) return;
-    await call(() => request('SET_SETTINGS', { patch: { limits, workingHours: hours, minGapSec: gap, rampUp } }));
+    await call(() => request('SET_SETTINGS', { patch: { limits, workingHours: hours, minGapSec: gap, rampUp, timezone: tz } }));
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -53,7 +55,13 @@ export function Limits() {
           <span class="small muted">/день</span>
         </div>
       ))}
-      <h2>Рабочее окно (МСК)</h2>
+      <h2>Рабочее окно</h2>
+      <label>Часовой пояс</label>
+      <div class="row">
+        <input value={tz} onInput={(e) => setTz((e.target as HTMLInputElement).value)} style="flex:1" />
+        <button onClick={() => setTz(Intl.DateTimeFormat().resolvedOptions().timeZone)}>мой</button>
+        <button onClick={() => setTz('Europe/Moscow')}>Москва</button>
+      </div>
       <div class="row">
         <input type="time" value={hours.start} onInput={(e) => setHours({ ...hours, start: (e.target as HTMLInputElement).value })} style="width:110px" />
         <span>—</span>

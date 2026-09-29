@@ -15,6 +15,9 @@ export function Queue() {
       <PostGenerator />
 {!items.length && <EmptyState />}
       {waiting.map((a) => <ActionCard key={a.id} action={a} />)}
+      {state.value && (inFlight.length > 0 || state.value.dispatchStatus.startsWith('Пауза') || state.value.dispatchStatus.startsWith('Движок')) && (
+        <div class={`banner ${/Отправляю/.test(state.value.dispatchStatus) ? 'ok' : 'warn'} small`}>{state.value.dispatchStatus}</div>
+      )}
       {inFlight.length > 0 && (
         <details open>
           <summary class="small muted">Одобрено и ждёт отправки: {inFlight.length}</summary>

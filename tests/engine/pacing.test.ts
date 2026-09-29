@@ -23,22 +23,23 @@ function executed(type: Action['type'], executedAt: number): Action {
 describe('pacing: время и лимиты', () => {
   it('минуты и день недели в таймзоне', () => {
     expect(minutesInTz(FRI_NOON_MSK, 'Europe/Moscow')).toEqual({ minutes: 12 * 60, weekday: 5 });
-    expect(isWorkingHours(FRI_NOON_MSK, DEFAULT_SETTINGS)).toBe(true);
-    expect(isWorkingHours(FRI_2330_MSK, DEFAULT_SETTINGS)).toBe(false);
+    const msk = { ...DEFAULT_SETTINGS, timezone: 'Europe/Moscow' };
+    expect(isWorkingHours(FRI_NOON_MSK, msk)).toBe(true);
+    expect(isWorkingHours(FRI_2330_MSK, msk)).toBe(false);
   });
 
   it('ramp-up и выходные множат лимит', () => {
-    const s = { ...DEFAULT_SETTINGS, rampStartAt: FRI_NOON_MSK - 2 * 86_400_000 };
+    const s = { ...DEFAULT_SETTINGS, timezone: 'Europe/Moscow', rampStartAt: FRI_NOON_MSK - 2 * 86_400_000 };
     expect(limitFactor(FRI_NOON_MSK, s)).toBeCloseTo(0.4);
     expect(dailyLimit('comment-on-stranger', FRI_NOON_MSK, s)).toBe(8);
     expect(limitFactor(FRI_NOON_MSK, { ...s, rampStartAt: FRI_NOON_MSK - 10 * 86_400_000 })).toBeCloseTo(0.7);
     expect(limitFactor(FRI_NOON_MSK, { ...s, rampStartAt: FRI_NOON_MSK - 30 * 86_400_000 })).toBe(1);
-    expect(limitFactor(SAT_NOON_MSK, { ...DEFAULT_SETTINGS, rampUp: false })).toBe(0.5);
+    expect(limitFactor(SAT_NOON_MSK, { ...DEFAULT_SETTINGS, timezone: 'Europe/Moscow', rampUp: false })).toBe(0.5);
   });
 });
 
 describe('pacing: checkPacing', () => {
-  const s = { ...DEFAULT_SETTINGS, rampUp: false };
+  const s = { ...DEFAULT_SETTINGS, rampUp: false, timezone: 'Europe/Moscow' };
   it('вне окна — ждать начала окна', () => {
     const v = checkPacing({ settings: s, type: 'comment-on-stranger', now: FRI_2330_MSK, todayExecuted: [], rng: () => 0 });
     expect(v.ok).toBe(false);
@@ -102,7 +103,7 @@ describe('anomaly-policy', () => {
 describe('dispatcher', () => {
   beforeEach(async () => {
     await resetDbForTests();
-    await settingsItem.setValue({ ...DEFAULT_SETTINGS, rampUp: false });
+    await settingsItem.setValue({ ...DEFAULT_SETTINGS, rampUp: false, timezone: 'Europe/Moscow' });
   });
 
   it('не запускает при stopped/paused/sleeping-вне-окна и переводит в sleeping вне окна', async () => {
@@ -118,9 +119,18 @@ describe('dispatcher', () => {
     expect(exec).not.toHaveBeenCalled();
   });
 
+  it('«спящий» движок просыпается, когда окно открылось, и отправляет', async () => {
+    await engineStateItem.setValue({ status: 'sleeping', anomalies24h: [] });
+    await settingsItem.setValue({ ...DEFAULT_SETTINGS, rampUp: false, timezone: 'Europe/Moscow', minGapSec: [0, 0], sameTypeGapSec: [0, 0] });
+    await createAction({ type: 'comment-on-stranger', targetHandle: 'u', targetPostId: 'u/post/1', context: '', dedupeKey: 'k1', autonomyMode: 'auto', draftText: 'x' });
+    const exec = vi.fn(async () => ({ ok: true, verified: true }));
+    expect(await dispatchOnce(exec, FRI_NOON_MSK)).toBe('executed');
+    expect((await engineStateItem.getValue()).status).toBe('running');
+  });
+
   it('исполняет queued с текстом, фиксирует done/verified и лимит', async () => {
     await engineStateItem.setValue({ status: 'running', anomalies24h: [] });
-    await settingsItem.setValue({ ...DEFAULT_SETTINGS, rampUp: false, limits: { ...DEFAULT_SETTINGS.limits, 'comment-on-stranger': 1 }, minGapSec: [0, 0], sameTypeGapSec: [0, 0] });
+    await settingsItem.setValue({ ...DEFAULT_SETTINGS, rampUp: false, timezone: 'Europe/Moscow', limits: { ...DEFAULT_SETTINGS.limits, 'comment-on-stranger': 1 }, minGapSec: [0, 0], sameTypeGapSec: [0, 0] });
     const a1 = await createAction({ type: 'comment-on-stranger', targetHandle: 'u', targetPostId: 'u/post/1', context: '', dedupeKey: 'k1', autonomyMode: 'auto', draftText: 'один' });
     const a2 = await createAction({ type: 'comment-on-stranger', targetHandle: 'v', targetPostId: 'v/post/2', context: '', dedupeKey: 'k2', autonomyMode: 'auto', draftText: 'два' });
     const exec = vi.fn(async () => ({ ok: true, verified: true, resultUrl: 'r' }));
@@ -137,7 +147,7 @@ describe('dispatcher', () => {
 
   it('ошибка → retry до 2 попыток, потом failed', async () => {
     await engineStateItem.setValue({ status: 'running', anomalies24h: [] });
-    await settingsItem.setValue({ ...DEFAULT_SETTINGS, rampUp: false, minGapSec: [0, 0], sameTypeGapSec: [0, 0] });
+    await settingsItem.setValue({ ...DEFAULT_SETTINGS, rampUp: false, timezone: 'Europe/Moscow', minGapSec: [0, 0], sameTypeGapSec: [0, 0] });
     const a = await createAction({ type: 'comment-on-stranger', targetHandle: 'u', targetPostId: 'u/post/1', context: '', dedupeKey: 'k1', autonomyMode: 'auto', draftText: 'x' });
     const exec = vi.fn(async () => ({ ok: false, verified: false, error: 'boom' }));
     expect(await dispatchOnce(exec, FRI_NOON_MSK)).toBe('executed');

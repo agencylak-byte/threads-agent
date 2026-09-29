@@ -5,6 +5,7 @@ import { isJobRunning } from './jobs';
 import { executeInTab, initAnomalyHandling } from './executor';
 import { dailyMetrics } from './daily';
 import { broadcast } from './state';
+import { engineStateItem } from '@/shared/settings';
 import { log } from '@/shared/log';
 
 // Движок: alarm раз в минуту → tick() (expire → classify → plan → draft → dispatch). Дневной alarm — метрики.
@@ -69,6 +70,16 @@ async function runMigrationRepropose(): Promise<void> {
   log('info', `migration repropose_v1: удалено ${purged.length} снятых предложений, ${reset} постов возвращено на рассмотрение`);
   broadcast('actions');
   broadcast('state');
+  const tzFlag = storage.defineItem<boolean>('local:migration_tz_local_v1', { fallback: false });
+  if (!(await tzFlag.getValue())) {
+    const { patchSettings, localTimezone } = await import('@/shared/settings');
+    await patchSettings({ timezone: localTimezone() });
+    // разбудить движок, если он «уснул» по московскому окну
+    const st = await engineStateItem.getValue();
+    if (st.status === 'sleeping') await engineStateItem.setValue({ ...st, status: 'running' });
+    await tzFlag.setValue(true);
+    log('info', `migration tz_local_v1: таймзона → ${localTimezone()}`);
+  }
 }
 
 function nextLocalTime(hour: number, minute: number, now = new Date()): number {
