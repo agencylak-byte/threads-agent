@@ -25,7 +25,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -70,6 +70,11 @@ async function runMigrationRepropose(): Promise<void> {
   log('info', `migration repropose_v1: удалено ${purged.length} снятых предложений, ${reset} постов возвращено на рассмотрение`);
   broadcast('actions');
   broadcast('state');
+}
+
+/** Таймзона → местная (один раз). Лера во Вьетнаме, а окно считалось по Москве. */
+async function runMigrationTimezone(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
   const tzFlag = storage.defineItem<boolean>('local:migration_tz_local_v1', { fallback: false });
   if (!(await tzFlag.getValue())) {
     const { patchSettings, localTimezone } = await import('@/shared/settings');
