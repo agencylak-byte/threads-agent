@@ -101,6 +101,7 @@ async function runMigrationAutopilotComments(): Promise<void> {
   if (await flag.getValue()) return;
   const { dispatchUiRequest } = await import('./handlers');
   await dispatchUiRequest({ type: 'SET_AUTONOMY', actionType: 'comment-on-stranger', mode: 'auto' });
+  await dispatchUiRequest({ type: 'SET_AUTONOMY', actionType: 'publish-post', mode: 'auto' });
   await flag.setValue(true);
   log('info', 'migration autopilot_comments_v1: comment-on-stranger → auto');
 }

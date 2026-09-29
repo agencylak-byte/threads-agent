@@ -14,6 +14,8 @@ export function Sources() {
   const [cm, setCm] = useState(70);
   const [screens, setScreens] = useState(5);
   const [autoMin, setAutoMin] = useState(80);
+  const [topics, setTopics] = useState('');
+  const [postsPerDay, setPostsPerDay] = useState(1);
   const [autoCollect, setAutoCollect] = useState(180);
   const [perRun, setPerRun] = useState(3);
   const [saved, setSaved] = useState(false);
@@ -30,6 +32,8 @@ export function Sources() {
     setPerRun(s.collectKeywordsPerRun);
     setAutoMin(s.autoCommentMin);
     setAutoCollect(s.autoCollectIntervalMin);
+    setTopics(s.postTopics.join('\n'));
+    setPostsPerDay(s.autoPostsPerDay);
   }, [s]);
 
   const save = async () => {
@@ -47,6 +51,8 @@ export function Sources() {
           collectKeywordsPerRun: perRun,
           autoCommentMin: autoMin,
           autoCollectIntervalMin: autoCollect,
+          postTopics: lines(topics),
+          autoPostsPerDay: postsPerDay,
         },
       }),
     );
@@ -76,6 +82,13 @@ export function Sources() {
       <input type="number" min={0} max={1440} value={autoCollect} onInput={(e) => setAutoCollect(Number((e.target as HTMLInputElement).value))} />
       <label>Максимум постов за один сбор</label>
       <input type="number" min={5} max={500} value={max} onInput={(e) => setMax(Number((e.target as HTMLInputElement).value))} />
+      <h2>Автопостинг</h2>
+      <label>Постов в день (0 — выключить)</label>
+      <input type="number" min={0} max={5} value={postsPerDay} onInput={(e) => setPostsPerDay(Number((e.target as HTMLInputElement).value))} />
+      <label>Темы по кругу (каждая с новой строки)</label>
+      <textarea rows={8} value={topics} onInput={(e) => setTopics((e.target as HTMLTextAreaElement).value)} />
+      <p class="small muted">Расширение берёт следующую тему, пишет пост в вашем голосе и публикует само, если «Публикация поста» в «Лимитах» стоит в автопилоте.</p>
+
       <h2>Отбор постов для комментариев</h2>
       <label>Балл «стоит комментировать» (0 — точно нет, 100 — точно да), минимум: {cm}</label>
       <input type="range" min={0} max={100} step={5} value={cm} onInput={(e) => setCm(Number((e.target as HTMLInputElement).value))} />

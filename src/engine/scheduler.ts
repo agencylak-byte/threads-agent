@@ -60,6 +60,7 @@ export async function tick(): Promise<void> {
     await classifyStep();
     await planStep();
     await draftStep();
+    await autoPostStep(s);
     if (dispatchHook) await dispatchHook();
     await engineStateItem.setValue({ ...(await engineStateItem.getValue()), lastTickAt: Date.now() });
   } catch (e) {
@@ -146,4 +147,49 @@ export async function draftFor(a: Action, hint?: string): Promise<string> {
   await accountUsage(usage);
   await updateAction(a.id, { draftText: text, llm: usage, error: undefined });
   return text;
+}
+
+/**
+ * Автопостинг: если publish-post в автопилоте и сегодня ещё не набрано autoPostsPerDay —
+ * взять следующую тему по кругу, написать пост в её голосе и поставить в очередь отправки.
+ * Интервал между постами — не меньше рабочего окна / (постов в день + 1).
+ */
+export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): Promise<void> {
+  if (s.autoPostsPerDay <= 0 || !s.postTopics.length) return;
+  const autonomy = await autonomyItem.getValue();
+  if (autonomy['publish-post'] !== 'auto') return;
+  const self = await selfHandleItem.getValue();
+  if (!self) return;
+  const { isWorkingHours } = await import('./pacing');
+  if (!isWorkingHours(Date.now(), s)) return;
+  const { listActionsByStatus, listExecutedBetween, createAction, makeDedupeKey } = await import('@/db/repo-actions');
+  const pending = (await listActionsByStatus(['proposed', 'queued', 'executing'], 100)).filter((a) => a.type === 'publish-post');
+  if (pending.length) return;
+  const dayAgo = Date.now() - 24 * 3600_000;
+  const publishedToday = (await listExecutedBetween(dayAgo, Date.now() + 1)).filter((a) => a.type === 'publish-post');
+  if (publishedToday.length >= s.autoPostsPerDay) return;
+  const last = publishedToday.reduce((m, a) => Math.max(m, a.executedAt ?? 0), 0);
+  const minSpacingMs = (10 * 3600_000) / (s.autoPostsPerDay + 1);
+  if (last && Date.now() - last < minSpacingMs) return;
+
+  const topic = s.postTopics[s.postTopicCursor % s.postTopics.length]!;
+  const { draftPost } = await import('@/llm/tasks/post-draft');
+  const { listPostsByAuthor } = await import('@/db/repo-posts');
+  const recent = (await listPostsByAuthor(self)).slice(0, 10).map((p) => p.text);
+  const { variants, usage } = await draftPost(topic, recent);
+  await accountUsage(usage);
+  const v = variants[0];
+  if (!v) return;
+  await createAction({
+    type: 'publish-post',
+    targetHandle: self,
+    context: `Автопост · тема: ${topic}\nКрючок: ${v.hook}\nПочему: ${v.why}`,
+    dedupeKey: makeDedupeKey('publish-post', { handle: self }),
+    autonomyMode: 'auto',
+    draftText: v.text,
+    llm: usage,
+  });
+  const { patchSettings } = await import('@/shared/settings');
+  await patchSettings({ postTopicCursor: (s.postTopicCursor + 1) % s.postTopics.length });
+  log('info', `autopost: тема «${topic.slice(0, 50)}…» → в очередь публикации`);
 }
