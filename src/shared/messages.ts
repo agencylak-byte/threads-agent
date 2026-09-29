@@ -106,6 +106,7 @@ export interface UiRequests {
   GENERATE_POST: { req: { topic?: string }; res: { ok: boolean; error?: string } };
   OPEN_URL: { req: { url: string }; res: { ok: boolean } };
   OPEN_WORK_WINDOW: { req: Record<string, never>; res: { ok: boolean; error?: string } };
+  CLOSE_WORK_WINDOWS: { req: Record<string, never>; res: { ok: boolean; closed: number } };
 }
 
 export type UiRequestType = keyof UiRequests;

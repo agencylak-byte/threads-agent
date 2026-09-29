@@ -28,6 +28,7 @@ export function initEngine(): void {
     if (isJobRunning()) return;
     await runJob({ kind: 'collect-all-keywords' });
   });
+  void import('./tabs').then((t) => t.openWorkWindow().catch(() => undefined));
   browser.runtime.onInstalled.addListener(() => {
     // после обновления расширения пересоздаём дневной alarm на ночь (старый мог быть «через 5 минут»)
     void browser.alarms.clear(ALARM_DAILY).then(() => ensureAlarms());

@@ -141,6 +141,11 @@ export function registerBaseHandlers(): void {
     }
   });
 
+  registerHandler('CLOSE_WORK_WINDOWS', async () => {
+    const { closeAllWorkWindows } = await import('./tabs');
+    return { ok: true, closed: await closeAllWorkWindows() };
+  });
+
   registerHandler('OPEN_URL', async ({ url }) => {
     await browser.tabs.create({ url, active: true });
     return { ok: true };

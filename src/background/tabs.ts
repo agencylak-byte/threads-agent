@@ -45,7 +45,29 @@ export async function getWorkTab(create = true): Promise<number> {
  * Отдельное окно Chrome под расширение: одна вкладка threads.com, которую двигаем мы.
  * Лера работает в своём окне и панели; это окно можно отодвинуть, но не сворачивать (свёрнутое Chrome не рисует).
  */
+let windowLock: Promise<number> | null = null;
+
 async function getDedicatedWorkTab(create: boolean): Promise<number> {
+  // один вызов за раз: параллельные задачи не должны открывать по окну каждая
+  if (windowLock) return windowLock;
+  windowLock = resolveDedicatedWorkTab(create).finally(() => {
+    windowLock = null;
+  });
+  return windowLock;
+}
+
+/** Окно «наше», если в нём ровно одна вкладка и она threads.com (у Леры в её окне много вкладок). */
+async function findOurWindows(): Promise<Array<{ windowId: number; tabId: number }>> {
+  const all = await browser.windows.getAll({ populate: true, windowTypes: ['normal'] });
+  const out: Array<{ windowId: number; tabId: number }> = [];
+  for (const w of all) {
+    const tabs = w.tabs ?? [];
+    if (w.id !== undefined && tabs.length === 1 && tabs[0]?.id !== undefined && isThreadsUrl(tabs[0].url)) out.push({ windowId: w.id, tabId: tabs[0].id });
+  }
+  return out;
+}
+
+async function resolveDedicatedWorkTab(create: boolean): Promise<number> {
   const savedWin = await workWindowItem.getValue();
   if (savedWin !== null) {
     try {
@@ -55,11 +77,21 @@ async function getDedicatedWorkTab(create: boolean): Promise<number> {
         if (!isThreadsUrl(tab.url)) await browser.tabs.update(tab.id, { url: THREADS_ORIGIN + '/' });
         await workTabItem.setValue(tab.id);
         if (w.state === 'minimized') await browser.windows.update(savedWin, { state: 'normal' });
+        await closeExtraWindows(savedWin);
         return tab.id;
       }
     } catch {
       // окно закрыто
     }
+  }
+  // после обновления/рестарта id мог потеряться — переиспользуем уже открытое «наше» окно
+  const ours = await findOurWindows();
+  if (ours.length) {
+    const keep = ours[0]!;
+    await workWindowItem.setValue(keep.windowId);
+    await workTabItem.setValue(keep.tabId);
+    await closeExtraWindows(keep.windowId);
+    return keep.tabId;
   }
   if (!create) throw new Error('Рабочее окно закрыто — нажмите «Открыть рабочее окно» в «Здоровье»');
   const w = await browser.windows.create({ url: THREADS_ORIGIN + '/', type: 'normal', width: 960, height: 900, left: 40, top: 40, focused: false });
@@ -68,6 +100,20 @@ async function getDedicatedWorkTab(create: boolean): Promise<number> {
   await workWindowItem.setValue(w.id);
   await workTabItem.setValue(tab.id);
   return tab.id;
+}
+
+/** Закрыть лишние «наши» окна (по одной вкладке threads.com), кроме keepWindowId. */
+async function closeExtraWindows(keepWindowId: number): Promise<void> {
+  for (const w of await findOurWindows()) {
+    if (w.windowId !== keepWindowId) await browser.windows.remove(w.windowId).catch(() => undefined);
+  }
+}
+
+export async function closeAllWorkWindows(): Promise<number> {
+  const ours = await findOurWindows();
+  for (const w of ours) await browser.windows.remove(w.windowId).catch(() => undefined);
+  await workWindowItem.setValue(null);
+  return ours.length;
 }
 
 export async function openWorkWindow(): Promise<number> {

@@ -25,6 +25,7 @@ export function Health() {
         </div>
         <div class="row" style="margin-top:8px">
           <button onClick={() => call(() => request('OPEN_WORK_WINDOW', {}))}>Открыть рабочее окно</button>
+          <button onClick={() => call(() => request('CLOSE_WORK_WINDOWS', {}))}>Закрыть рабочие окна</button>
         </div>
         <p class="small muted">Расширение работает в отдельном окне Chrome с вкладкой threads.com. Ваши вкладки оно не трогает. Окно не сворачивайте.</p>
       </div>
