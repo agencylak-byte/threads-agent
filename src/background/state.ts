@@ -108,7 +108,8 @@ async function describeDispatch(engine: EngineState, settings: Settings, hasKey:
   if (!queued.length) return 'Одобренных к отправке нет.';
   if (isJobRunning()) return `Идёт сбор (${currentJob?.kind ?? ''}) — отправка продолжится после него.`;
   if (!isWorkingHours(now, settings)) return `Вне рабочего окна ${settings.workingHours.start}–${settings.workingHours.end} (${settings.timezone}). Продолжу утром.`;
-  const first = queued.sort((a, b) => (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt))[0]!;
+  const order = (t: string) => (t === 'publish-post' ? 0 : t === 'reply-own-post' ? 1 : 4);
+  const first = queued.sort((a, b) => order(a.type) - order(b.type) || (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt))[0]!;
   const dayStart = now - 24 * 3600_000;
   const today = await listExecutedBetween(dayStart, now + 1);
   const lastAll = today.reduce<number | undefined>((m, a) => Math.max(m ?? 0, a.executedAt ?? 0) || m, undefined);

@@ -58,27 +58,42 @@ export async function dispatchOnce(execute: Executor, now = Date.now()): Promise
 
   if (settings.rampUp && !settings.rampStartAt) await patchSettings({ rampStartAt: now });
 
-  const queued = (await listActionsByStatus(['queued'], 100))
+  const queued = (await listActionsByStatus(['queued'], 300))
     .filter((a) => a.draftText || a.finalText)
     .filter((a) => !a.scheduledFor || a.scheduledFor <= now)
-    .sort((a, b) => (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt));
-  const action = queued[0];
-  if (!action) return 'idle';
+    // свои посты и ответы под ними — вперёд: у них свои лимиты, они не должны ждать за очередью комментариев чужим
+    .sort((a, b) => priority(a.type) - priority(b.type) || (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt));
+  if (!queued.length) return 'idle';
 
   const [dayStart, dayEnd] = dayBounds(now, settings.timezone);
   const todayExecuted = await listExecutedBetween(dayStart, dayEnd);
   const lastAll = todayExecuted.reduce<number | undefined>((m, a) => Math.max(m ?? 0, a.executedAt ?? 0) || m, undefined);
-  const lastSame = todayExecuted.filter((a) => a.type === action.type).reduce<number | undefined>((m, a) => Math.max(m ?? 0, a.executedAt ?? 0) || m, undefined);
 
-  const verdict = checkPacing({ settings, type: action.type, now, todayExecuted, lastExecutedAt: lastAll, lastExecutedSameTypeAt: lastSame });
-  if (!verdict.ok) {
-    await updateAction(action.id, { scheduledFor: verdict.retryAt });
-    if (verdict.reason === 'outside_hours' && engine.status === 'running') {
-      engine = { ...engine, status: 'sleeping' };
-      await engineStateItem.setValue(engine);
+  // идём по очереди: первое действие, которому пейсинг разрешает отправку сейчас (лимиты — по типам)
+  let action: Action | undefined;
+  const blockedTypes = new Set<ActionType>();
+  for (const candidate of queued) {
+    if (blockedTypes.has(candidate.type)) continue;
+    const lastSame = todayExecuted.filter((a) => a.type === candidate.type).reduce<number | undefined>((m, a) => Math.max(m ?? 0, a.executedAt ?? 0) || m, undefined);
+    const verdict = checkPacing({ settings, type: candidate.type, now, todayExecuted, lastExecutedAt: lastAll, lastExecutedSameTypeAt: lastSame });
+    if (verdict.ok) {
+      action = candidate;
+      break;
     }
+    if (verdict.reason === 'outside_hours') {
+      if (engine.status === 'running') await engineStateItem.setValue({ ...engine, status: 'sleeping' });
+      return 'deferred';
+    }
+    if (verdict.reason === 'daily_limit' || verdict.reason === 'same_type_gap') {
+      blockedTypes.add(candidate.type);
+      await updateAction(candidate.id, { scheduledFor: verdict.retryAt });
+      continue;
+    }
+    // min_gap / session_pause — общие для всех типов: ждём
+    await updateAction(candidate.id, { scheduledFor: verdict.retryAt });
     return 'deferred';
   }
+  if (!action) return 'deferred';
   if (engine.status !== 'running') {
     await engineStateItem.setValue({ ...engine, status: 'running' });
   }
@@ -129,6 +144,21 @@ async function applyResult(action: Action, r: ExecResult, now: number): Promise<
     scheduledFor: retry ? now + delay : undefined,
   });
   log('error', `${action.type} → @${action.targetHandle} failed (attempt ${action.attempts + 1}): ${r.error}`);
+}
+
+function priority(type: ActionType): number {
+  switch (type) {
+    case 'publish-post':
+      return 0;
+    case 'reply-own-post':
+      return 1;
+    case 'dm-continue':
+      return 2;
+    case 'reply-thread':
+      return 3;
+    default:
+      return 4;
+  }
 }
 
 function metricFor(type: ActionType): 'commentsSent' | 'repliesSent' | 'dmFirstSent' | 'dmContinueSent' | 'postsPublished' {

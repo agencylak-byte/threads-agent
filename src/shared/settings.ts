@@ -117,6 +117,7 @@ export const questionnaireItem = storage.defineItem<QuestionnaireAnswers | null>
 });
 export const workTabItem = storage.defineItem<number | null>('session:workTabId', { fallback: null });
 export const workWindowItem = storage.defineItem<number | null>('local:workWindowId', { fallback: null });
+export const lastWindowCreateItem = storage.defineItem<number>('local:lastWindowCreateAt', { fallback: 0 });
 
 export async function getSettings(): Promise<Settings> {
   const raw = await settingsItem.getValue();

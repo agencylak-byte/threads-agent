@@ -160,6 +160,9 @@ function nextLocalTime(hour: number, minute: number, now = new Date()): number {
 /** Тик вручную (после сбора, после запуска движка) — не ждать минуту. */
 export async function runTick(): Promise<void> {
   try {
+    if ((await import('@/shared/settings')).DEFAULT_SETTINGS && (await (await import('@/shared/settings')).getSettings()).dedicatedWindow) {
+      await (await import('./tabs')).tidyWorkWindows().catch(() => undefined);
+    }
     await tick();
   } catch (e) {
     log('error', 'runTick', String(e));
