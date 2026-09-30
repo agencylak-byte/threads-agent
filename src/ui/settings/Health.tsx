@@ -23,6 +23,12 @@ export function Health() {
             </button>
           )}
         </div>
+        {s && (
+          <div class="small" style="margin-top:6px">
+            Отправок за сутки: <b>{s.sends24h.total}</b>, подтверждено на странице: <b>{s.sends24h.verified}</b>
+            {s.sends24h.total > 0 && ` (${Math.round((100 * s.sends24h.verified) / s.sends24h.total)}%)`}
+          </div>
+        )}
         <div class="row" style="margin-top:8px">
           <button onClick={() => call(() => request('OPEN_WORK_WINDOW', {}))}>Открыть рабочее окно</button>
           <button onClick={() => call(() => request('CLOSE_WORK_WINDOWS', {}))}>Закрыть рабочие окна</button>

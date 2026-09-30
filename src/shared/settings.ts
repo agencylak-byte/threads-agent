@@ -53,6 +53,8 @@ export const SettingsSchema = z.object({
     'куда я бы вложила первые 50 тысяч на продвижение эксперта в 2026',
   ]),
   postTopicCursor: z.number().int().min(0).default(0),
+  /** История тем автопостов: тема не повторяется раньше чем через 14 дней. */
+  topicHistory: z.array(z.object({ topic: z.string(), at: z.number() })).default([]),
   /** Автосбор по ключам раз в N минут (0 — только вручную). */
   autoCollectIntervalMin: z.number().int().min(0).max(1440).default(180),
   /** Вспомогательные пороги (автор похож на клиента; пост по теме). */

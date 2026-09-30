@@ -24,7 +24,6 @@ export interface ExecResult {
 }
 export type Executor = (action: Action) => Promise<ExecResult>;
 
-let unverifiedStreak = 0;
 
 /** Начало текущего дня в TZ (по dateKey) — приближённо через поиск полуночи. */
 function dayBounds(now: number, timezone: string): [number, number] {
@@ -108,13 +107,17 @@ async function applyResult(action: Action, r: ExecResult, now: number): Promise<
   const settings = await getSettings();
   const day = dateKey(now, settings.timezone);
   if (r.ok) {
-    unverifiedStreak = r.verified ? 0 : unverifiedStreak + 1;
+    // серия неподтверждённых — в storage: service worker засыпает, переменная модуля обнуляется
+    const st0 = await engineStateItem.getValue();
+    const unverifiedStreak = r.verified ? 0 : (st0.unverifiedStreak ?? 0) + 1;
+    await engineStateItem.setValue({ ...st0, unverifiedStreak });
     await updateAction(action.id, {
       status: 'done',
       executedAt: now,
       verifiedAt: r.verified ? now : undefined,
+      verifyAfter: r.verified ? undefined : now + 15 * 60_000 + Math.round(Math.random() * 10 * 60_000),
       outcome: { ...action.outcome, verified: r.verified },
-      error: r.verified ? undefined : 'не подтверждено в DOM',
+      error: r.verified ? undefined : 'не подтверждено на странице — перепроверю через 15–25 минут',
     });
     if (action.targetPostId) await setActionStatus(action.targetPostId, 'commented');
     await touchAuthorAction(action.targetHandle, now);
@@ -122,10 +125,9 @@ async function applyResult(action: Action, r: ExecResult, now: number): Promise<
     await bumpMetric(day, metricFor(action.type));
     await addEvent({ at: now, kind: 'action', message: `${action.type} → @${action.targetHandle}${r.verified ? '' : ' (не подтверждено)'}`, url: r.resultUrl ?? action.threadUrl });
     if (unverifiedStreak >= 3) {
-      unverifiedStreak = 0;
       const { applyAnomaly } = await import('./anomaly-policy');
       const st = await engineStateItem.getValue();
-      await engineStateItem.setValue(applyAnomaly(st, { kind: 'unverified_streak', text: '3 подряд', url: action.threadUrl ?? '', at: now }, now));
+      await engineStateItem.setValue({ ...applyAnomaly(st, { kind: 'unverified_streak', text: '3 подряд', url: action.threadUrl ?? '', at: now }, now), unverifiedStreak: 0 });
     }
     log('info', `done ${action.type} → @${action.targetHandle} verified=${r.verified}`);
     return;
@@ -175,4 +177,32 @@ function metricFor(type: ActionType): 'commentsSent' | 'repliesSent' | 'dmFirstS
     case 'publish-post':
       return 'postsPublished';
   }
+}
+
+export type Verifier = (action: Action) => Promise<boolean | null>; // null — не смогли проверить (вкладка)
+
+/** Повторная проверка неподтверждённых отправок (задача 3 из разбора): нашлось → done+verified, нет → failed. */
+export async function reverifyOnce(verify: Verifier, now = Date.now()): Promise<'idle' | 'checked'> {
+  const due = (await listActionsByStatus(['done'], 300)).filter(
+    (a) => a.outcome.verified === false && !a.outcome.reverified && a.verifyAfter !== undefined && a.verifyAfter <= now && a.threadUrl,
+  );
+  const a = due[0];
+  if (!a) return 'idle';
+  const found = await verify(a);
+  if (found === null) {
+    await updateAction(a.id, { verifyAfter: now + 10 * 60_000 });
+    return 'checked';
+  }
+  const settings = await getSettings();
+  if (found) {
+    await updateAction(a.id, { verifiedAt: now, outcome: { ...a.outcome, verified: true, reverified: true }, error: undefined });
+    log('info', `reverify: ${a.type} → @${a.targetHandle} подтверждён`);
+  } else {
+    await updateAction(a.id, { status: 'failed', outcome: { ...a.outcome, reverified: true }, error: 'не найден на странице при повторной проверке — Threads не принял' });
+    // не засчитываем в отправленное
+    await bumpMetric(dateKey(a.executedAt ?? now, settings.timezone), metricFor(a.type), -1);
+    if (a.targetPostId) await setActionStatus(a.targetPostId, 'skipped');
+    log('error', `reverify: ${a.type} → @${a.targetHandle} НЕ найден — failed`);
+  }
+  return 'checked';
 }

@@ -1,8 +1,9 @@
-import { ALARM_DAILY, ALARM_TICK, TICK_PERIOD_MIN } from '@/shared/constants';
-import { setActivityHook, setCollectHook, setDispatchHook, tick } from '@/engine/scheduler';
-import { dispatchOnce } from '@/engine/dispatcher';
+import { ALARM_DAILY, ALARM_TICK, ALARM_WATCHDOG, TICK_PERIOD_MIN } from '@/shared/constants';
+import { runWatchdog } from './watchdog';
+import { setActivityHook, setCollectHook, setDispatchHook, setReverifyHook, tick } from '@/engine/scheduler';
+import { dispatchOnce, reverifyOnce } from '@/engine/dispatcher';
 import { isJobRunning, runJob } from './jobs';
-import { executeInTab, initAnomalyHandling } from './executor';
+import { executeInTab, initAnomalyHandling, verifyInTab } from './executor';
 import { dailyMetrics } from './daily';
 import { broadcast } from './state';
 import { engineStateItem } from '@/shared/settings';
@@ -24,6 +25,12 @@ export function initEngine(): void {
     if (st.status !== 'running') return;
     await runJob({ kind: 'collect-activity' });
   });
+  setReverifyHook(async () => {
+    if (isJobRunning()) return;
+    const st = await engineStateItem.getValue();
+    if (st.status !== 'running') return;
+    await reverifyOnce(verifyInTab);
+  });
   setCollectHook(async () => {
     if (isJobRunning()) return;
     await runJob({ kind: 'collect-all-keywords' });
@@ -43,6 +50,7 @@ export function initEngine(): void {
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === ALARM_TICK) void runTick();
     if (alarm.name === ALARM_DAILY) void dailyMetrics();
+    if (alarm.name === ALARM_WATCHDOG) void runWatchdog();
   });
 }
 
@@ -50,6 +58,8 @@ async function ensureAlarms(): Promise<void> {
   const existing = await browser.alarms.get(ALARM_TICK);
   if (!existing) await browser.alarms.create(ALARM_TICK, { periodInMinutes: TICK_PERIOD_MIN, delayInMinutes: 0.2 });
   // Дневные метрики — ночью (04:10 по местному времени), чтобы не уводить вкладку, пока Лера работает.
+  const wd = await browser.alarms.get(ALARM_WATCHDOG);
+  if (!wd) await browser.alarms.create(ALARM_WATCHDOG, { periodInMinutes: 60, delayInMinutes: 30 });
   const daily = await browser.alarms.get(ALARM_DAILY);
   if (!daily) await browser.alarms.create(ALARM_DAILY, { periodInMinutes: 60 * 24, when: nextLocalTime(4, 10) });
 }

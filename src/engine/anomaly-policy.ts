@@ -42,5 +42,7 @@ export function label(a: Anomaly): string {
       return 'селекторы Threads не находят элементы';
     case 'http_429':
       return 'HTTP 429 от Threads';
+    case 'load_error':
+      return 'экран «Произошла ошибка» не уходит после повтора и перезагрузки';
   }
 }

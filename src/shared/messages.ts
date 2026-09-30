@@ -40,14 +40,16 @@ export type ContentToSw =
   | { type: 'ANOMALY'; anomaly: Anomaly }
   | { type: 'SELFTEST_RESULT'; page: string; broken: string[] }
   | { type: 'PAGE_DUMP'; page: string; html: string }
-  | { type: 'HEARTBEAT' };
+  | { type: 'HEARTBEAT' }
+  | { type: 'VERIFY_RESULT'; actionId: string; found: boolean };
 
 export type SwToContent =
   | { type: 'NAVIGATE'; url: string }
   | { type: 'COLLECT'; params: CollectParams }
   | { type: 'EXECUTE_ACTION'; action: Action; selfHandle: string; likeBefore: boolean }
   | { type: 'RUN_SELFTEST' }
-  | { type: 'DUMP_PAGE' };
+  | { type: 'DUMP_PAGE' }
+  | { type: 'VERIFY_REPLY'; actionId: string; selfHandle: string; text: string };
 
 export type JobKind =
   | 'collect-keyword'
@@ -72,6 +74,8 @@ export interface StateSnapshot {
   funnel: { unclassified: number; classified: number; lprPass: number; candidates: number; skipped: number; commented: number };
   /** Почему сейчас не отправляется (или что ждём). */
   dispatchStatus: string;
+  /** Отправки за сутки: всего / подтверждённых на странице. */
+  sends24h: { total: number; verified: number };
   currentJob: JobRequest | null;
   lastSelftest?: { page: string; broken: string[]; at: number };
   todayCost: number;

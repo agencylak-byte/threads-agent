@@ -73,6 +73,7 @@ async function handle(m: ContentToSw): Promise<void> {
     case 'ACTION_RESULT':
     case 'PAGE_DUMP':
     case 'HEARTBEAT':
+    case 'VERIFY_RESULT':
       return; // обрабатываются адресно через waitForMessage / пульс только держит SW живым
   }
 }

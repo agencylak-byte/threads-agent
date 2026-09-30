@@ -32,5 +32,13 @@ export async function dailyMetrics(): Promise<void> {
   } catch (e) {
     log('error', 'daily metrics failed', String(e));
   }
+  // суточная выгрузка (задача 10 из разбора): история должна жить не только в браузере
+  try {
+    const { downloadCsv } = await import('@/db/export-csv');
+    for (const store of ['actions', 'metrics_daily', 'events', 'posts'] as const) await downloadCsv(store);
+    log('info', 'daily export: CSV сохранены в Загрузки/threads-agent');
+  } catch (e) {
+    log('error', 'daily export failed', String(e));
+  }
   await pruneEvents(5000);
 }

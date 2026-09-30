@@ -103,6 +103,8 @@ export interface ActionOutcome {
   followedAt?: number;
   leadAt?: number;
   verified?: boolean;
+  /** Повторная проверка через 10–30 минут уже была. */
+  reverified?: boolean;
 }
 
 export interface Action {
@@ -124,6 +126,10 @@ export interface Action {
   scheduledFor?: number;
   executedAt?: number;
   executingAt?: number;
+  /** Отправлено, но на странице не найдено: когда перепроверить. */
+  verifyAfter?: number;
+  /** Черновик не прошёл защиту от выдуманных цифр — требует ручного одобрения. */
+  needsReview?: boolean;
   verifiedAt?: number;
   error?: string;
   rejectReason?: string;
@@ -211,7 +217,8 @@ export type AnomalyKind =
   | 'challenge'
   | 'unverified_streak'
   | 'selectors_broken'
-  | 'http_429';
+  | 'http_429'
+  | 'load_error';
 
 export interface Anomaly {
   kind: AnomalyKind;
@@ -229,6 +236,8 @@ export interface EngineState {
   anomalies24h: number[]; // timestamps
   startedAt?: number;
   lastTickAt?: number;
+  /** Серия неподтверждённых отправок подряд — в storage, а не в памяти SW (он засыпает). */
+  unverifiedStreak?: number;
 }
 
 export interface ObservedProfile {

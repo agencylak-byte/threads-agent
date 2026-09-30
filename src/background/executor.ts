@@ -28,6 +28,7 @@ export async function executeInTab(action: Action): Promise<ExecResult> {
       return { ok: false, verified: false, error: 'content script не подключён', transient: true };
     }
     const r = await res;
+    if (!r.ok && /экран ошибки загрузки/.test(r.error ?? '')) return { ok: false, verified: false, error: r.error, transient: true };
     if (r.debugHtml) {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       browser.downloads
@@ -74,4 +75,22 @@ export function initAnomalyHandling(): void {
       }
     })();
   });
+}
+
+const isVerifyResult = (id: string) => (m: ContentToSw): m is Extract<ContentToSw, { type: 'VERIFY_RESULT' }> =>
+  m.type === 'VERIFY_RESULT' && m.actionId === id;
+
+/** Открыть тред и проверить, есть ли там наш комментарий. null — не удалось проверить (вкладка/порт). */
+export async function verifyInTab(action: Action): Promise<boolean | null> {
+  const self = await selfHandleItem.getValue();
+  if (!self || !action.threadUrl) return null;
+  try {
+    const tabId = await getWorkTab();
+    await navigateWorkTab(action.threadUrl);
+    const res = waitForMessage(tabId, isVerifyResult(action.id), 30_000);
+    if (!sendToTab(tabId, { type: 'VERIFY_REPLY', actionId: action.id, selfHandle: self, text: action.finalText ?? action.draftText ?? '' })) return null;
+    return (await res).found;
+  } catch {
+    return null;
+  }
 }

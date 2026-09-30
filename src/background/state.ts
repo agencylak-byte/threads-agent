@@ -61,12 +61,15 @@ export async function buildSnapshot(): Promise<StateSnapshot> {
     if (p.ai.lprScore >= settings.lprMinScore && (p.ai.relevance ?? 0) >= settings.relevanceMin && fresh && p.actionStatus === 'none') funnel.candidates++;
   }
   const dispatchStatus = await describeDispatch(engine, settings, apiKey.length > 0);
+  const day = await listExecutedBetween(Date.now() - 24 * 3600_000, Date.now() + 1);
+  const sends24h = { total: day.length, verified: day.filter((a) => a.outcome.verified).length };
   return {
     engine,
     selfHandle,
     counts: { posts, authors, proposed, queued, done, events },
     funnel,
     dispatchStatus,
+    sends24h,
     currentJob,
     lastSelftest,
     todayCost: today.llmCostUsd,

@@ -51,6 +51,7 @@ export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
 export const ALARM_TICK = 'engine-tick';
 export const ALARM_DAILY = 'daily-metrics';
+export const ALARM_WATCHDOG = 'watchdog';
 export const TICK_PERIOD_MIN = 1;
 
 export const PORT_NAME = 'threads-agent-content';

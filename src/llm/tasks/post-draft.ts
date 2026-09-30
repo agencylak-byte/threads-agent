@@ -16,7 +16,7 @@ export interface PostVariant {
   why: string;
 }
 
-export async function draftPost(topic: string | undefined, recentPosts: string[], hint?: string): Promise<{ variants: PostVariant[]; usage: LlmUsage }> {
+export async function draftPost(topic: string | undefined, recentPosts: string[], hint?: string, variantsCount = 3): Promise<{ variants: PostVariant[]; usage: LlmUsage }> {
   const ctx = await llmContext();
   const maxChars = DRAFT_MAX_CHARS['publish-post'];
   const { result, usage } = await runPrompt({
@@ -28,9 +28,10 @@ export async function draftPost(topic: string | undefined, recentPosts: string[]
       topic: topic?.trim() || 'на выбор модели: из мира собственника (заявки, окупаемость, подрядчики) или линия «строю агентство на ИИ-агентах»',
       recentPosts: recentPosts.length ? recentPosts.map((p, i) => `${i + 1}. ${p.slice(0, 200)}`).join('\n') : '—',
       maxChars,
+      variantsCount,
       hint: fmtHint(hint),
     },
-    maxTokens: 1800,
+    maxTokens: variantsCount > 1 ? 1800 : 800,
     temperature: 0.9,
   });
   const parsed = parseJsonWith(ResultSchema, result.text);

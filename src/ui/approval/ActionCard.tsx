@@ -46,6 +46,7 @@ export function ActionCard({ action, compact = false }: { action: Action; compac
         {ACTION_TYPE_LABELS[action.type]} · @{action.targetHandle} · {statusLabel(action.status)}
         {url && <> · <a href={url} target="_blank" rel="noreferrer">открыть</a></>}
       </div>
+      {action.needsReview && <div class="banner warn small">Защита от выдуманных цифр: {action.error?.replace('защита от выдуманных цифр: ', '')}. Проверьте текст и одобрите вручную или пропустите.</div>}
       {!compact && action.context && (
         <details style="margin:6px 0">
           <summary class="small">Контекст (пост)</summary>

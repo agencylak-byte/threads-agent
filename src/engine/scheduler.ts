@@ -9,6 +9,8 @@ import { classifyPosts } from '@/llm/tasks/classify-lpr';
 import { draftComment } from '@/llm/tasks/comment-draft';
 import { draftReply } from '@/llm/tasks/reply-draft';
 import { openerDuplicate } from './dedupe';
+import { FACT_GUARD_HINT, checkFacts } from './fact-guard';
+import businessFactsMd from '@/profile/seed/business-facts.md?raw';
 import { planComments, planReplies } from './planner';
 import { canPrepare } from './autonomy';
 import type { Action, LlmUsage } from '@/shared/types';
@@ -22,6 +24,10 @@ let activityHook: (() => Promise<void>) | null = null;
 let lastActivityAt = 0;
 let collectHook: (() => Promise<void>) | null = null;
 let lastCollectAt = 0;
+let reverifyHook: (() => Promise<void>) | null = null;
+export function setReverifyHook(h: (() => Promise<void>) | null): void {
+  reverifyHook = h;
+}
 export function setCollectHook(h: (() => Promise<void>) | null): void {
   collectHook = h;
 }
@@ -62,6 +68,7 @@ export async function tick(): Promise<void> {
     await draftStep();
     await autoPostStep(s);
     if (dispatchHook) await dispatchHook();
+    if (reverifyHook) await reverifyHook();
     await engineStateItem.setValue({ ...(await engineStateItem.getValue()), lastTickAt: Date.now() });
   } catch (e) {
     log('error', 'tick failed', String(e));
@@ -128,8 +135,26 @@ export async function draftFor(a: Action, hint?: string): Promise<string> {
     if (!post) throw new Error('пост не найден в базе');
     let r = await draftComment(post, openers, hint);
     if (openerDuplicate(r.text, openers)) r = await draftComment(post, openers, (hint ? hint + '. ' : '') + 'Начни совсем иначе, чем перечисленные зачины');
+    const sources = [post.text, businessFactsMd];
+    let verdict = checkFacts(r.text, sources);
+    if (!verdict.ok) {
+      log('info', `fact-guard: выдуманные цифры ${verdict.fabricated.join(', ')} → перегенерация`);
+      r = await draftComment(post, openers, (hint ? hint + '. ' : '') + FACT_GUARD_HINT);
+      verdict = checkFacts(r.text, sources);
+    }
     text = r.text;
     usage = r.usage;
+    if (!verdict.ok) {
+      await updateAction(a.id, {
+        draftText: text,
+        llm: usage,
+        status: 'proposed',
+        needsReview: true,
+        error: `защита от выдуманных цифр: ${verdict.fabricated.join(', ')} — нужно ручное одобрение`,
+      });
+      log('info', `fact-guard: ${a.id} → на ручное одобрение`);
+      return text;
+    }
   } else if (a.type === 'reply-own-post' || a.type === 'reply-thread') {
     const reply = a.targetPostId ? await getPost(a.targetPostId) : undefined;
     if (!reply) throw new Error('реплика не найдена в базе');
@@ -138,9 +163,19 @@ export async function draftFor(a: Action, hint?: string): Promise<string> {
       ...(root ? [{ handle: root.authorHandle, text: root.text, isSelf: root.authorHandle === selfHandle }] : []),
       { handle: reply.authorHandle, text: reply.text, isSelf: false },
     ];
-    const r = await draftReply(a.type, thread, { handle: reply.authorHandle, text: reply.text, isSelf: false }, openers, hint);
+    let r = await draftReply(a.type, thread, { handle: reply.authorHandle, text: reply.text, isSelf: false }, openers, hint);
+    const sources = [...thread.map((l) => l.text), businessFactsMd];
+    let verdict = checkFacts(r.text, sources);
+    if (!verdict.ok) {
+      r = await draftReply(a.type, thread, { handle: reply.authorHandle, text: reply.text, isSelf: false }, openers, (hint ? hint + '. ' : '') + FACT_GUARD_HINT);
+      verdict = checkFacts(r.text, sources);
+    }
     text = r.text;
     usage = r.usage;
+    if (!verdict.ok) {
+      await updateAction(a.id, { draftText: text, llm: usage, status: 'proposed', needsReview: true, error: `защита от выдуманных цифр: ${verdict.fabricated.join(', ')} — нужно ручное одобрение` });
+      return text;
+    }
   } else {
     throw new Error(`draft для ${a.type} не поддерживается в этом инкременте`);
   }
@@ -163,31 +198,64 @@ export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): 
   const { listActionsByStatus, listExecutedBetween, createAction, makeDedupeKey } = await import('@/db/repo-actions');
   const pending = (await listActionsByStatus(['proposed', 'queued', 'executing'], 100)).filter((a) => a.type === 'publish-post');
   if (pending.length) return;
-  const dayAgo = Date.now() - 24 * 3600_000;
-  const publishedToday = (await listExecutedBetween(dayAgo, Date.now() + 1)).filter((a) => a.type === 'publish-post');
+  // «сегодня» — по календарю в таймзоне настроек, а не последние 24 часа
+  const { dateKey: dk } = await import('@/db/repo-metrics');
+  const todayKey = dk(Date.now(), s.timezone);
+  let dayStart = Date.now();
+  while (dk(dayStart - 60_000, s.timezone) === todayKey) dayStart -= 60_000;
+  const publishedToday = (await listExecutedBetween(dayStart, Date.now() + 1)).filter((a) => a.type === 'publish-post');
   if (publishedToday.length >= s.autoPostsPerDay) return;
   const last = publishedToday.reduce((m, a) => Math.max(m, a.executedAt ?? 0), 0);
-  const minSpacingMs = (10 * 3600_000) / (s.autoPostsPerDay + 1);
+  // шаг — от длины рабочего окна
+  const [sh, sm] = s.workingHours.start.split(':').map(Number);
+  const [eh, em] = s.workingHours.end.split(':').map(Number);
+  const windowMs = Math.max(60, (eh ?? 21) * 60 + (em ?? 0) - ((sh ?? 9) * 60 + (sm ?? 30))) * 60_000;
+  const minSpacingMs = windowMs / (s.autoPostsPerDay + 1);
   if (last && Date.now() - last < minSpacingMs) return;
 
-  const topic = s.postTopics[s.postTopicCursor % s.postTopics.length]!;
+  // тема: первая по кругу, которой не было последние 14 дней
+  const fresh = s.topicHistory.filter((h) => Date.now() - h.at < 14 * 86_400_000);
+  const used = new Set(fresh.map((h) => h.topic));
+  let topic: string | undefined;
+  for (let i = 0; i < s.postTopics.length; i++) {
+    const t = s.postTopics[(s.postTopicCursor + i) % s.postTopics.length]!;
+    if (!used.has(t)) {
+      topic = t;
+      break;
+    }
+  }
+  if (!topic) {
+    log('info', 'autopost: все темы использованы за 14 дней — добавьте темы в «Источниках»');
+    return;
+  }
   const { draftPost } = await import('@/llm/tasks/post-draft');
   const { listPostsByAuthor } = await import('@/db/repo-posts');
   const recent = (await listPostsByAuthor(self)).slice(0, 10).map((p) => p.text);
-  const { variants, usage } = await draftPost(topic, recent);
+  const { variants, usage } = await draftPost(topic, recent, undefined, 1);
   await accountUsage(usage);
   const v = variants[0];
   if (!v) return;
+  const verdict = checkFacts(v.text, [businessFactsMd]);
+  const needsReview = !verdict.ok;
   await createAction({
     type: 'publish-post',
     targetHandle: self,
     context: `Автопост · тема: ${topic}\nКрючок: ${v.hook}\nПочему: ${v.why}`,
     dedupeKey: makeDedupeKey('publish-post', { handle: self }),
-    autonomyMode: 'auto',
+    autonomyMode: needsReview ? 'suggest' : 'auto',
     draftText: v.text,
     llm: usage,
   });
+  if (needsReview) {
+    const { listActionsByStatus: la, updateAction: ua } = await import('@/db/repo-actions');
+    const just = (await la(['proposed'], 50)).find((x) => x.type === 'publish-post' && x.draftText === v.text);
+    if (just) await ua(just.id, { needsReview: true, error: `защита от выдуманных цифр: ${verdict.fabricated.join(', ')} — нужно ручное одобрение` });
+  }
   const { patchSettings } = await import('@/shared/settings');
-  await patchSettings({ postTopicCursor: (s.postTopicCursor + 1) % s.postTopics.length });
-  log('info', `autopost: тема «${topic.slice(0, 50)}…» → в очередь публикации`);
+  const idx = s.postTopics.indexOf(topic);
+  await patchSettings({
+    postTopicCursor: (idx + 1) % s.postTopics.length,
+    topicHistory: [...fresh, { topic, at: Date.now() }].slice(-100),
+  });
+  log('info', `autopost: тема «${topic.slice(0, 50)}…» → ${needsReview ? 'на ручное одобрение (цифры)' : 'в очередь публикации'}`);
 }

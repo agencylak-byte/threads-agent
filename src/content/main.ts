@@ -6,7 +6,7 @@ import { detectSelfHandle } from './parsers/profile';
 import { keywordFromUrl } from './parsers/search-page';
 import { waitForPage } from './actions/navigate';
 import { executeAction } from './actions/execute';
-import { startAnomalyWatch } from './anomaly-watch';
+import { detectLoadError, healLoadError, startAnomalyWatch } from './anomaly-watch';
 import type { SwToContent } from '@/shared/messages';
 import type { PostSource } from '@/shared/types';
 
@@ -73,10 +73,23 @@ export function startContent(): void {
         return;
       }
       case 'COLLECT': {
+        if (detectLoadError()) {
+          const ok = await healLoadError();
+          if (!ok) {
+            bridge.send({ type: 'COLLECT_DONE', mode: m.params.mode, count: 0 });
+            return;
+          }
+        }
         collector.stop();
         const count = await collector.runJob(m.params, location.href);
         bridge.send({ type: 'COLLECT_DONE', mode: m.params.mode, count });
         startPassive();
+        return;
+      }
+      case 'VERIFY_REPLY': {
+        const { verifyOwnReply } = await import('./actions/comment');
+        const found = await verifyOwnReply(m.selfHandle, m.text, 8000);
+        bridge.send({ type: 'VERIFY_RESULT', actionId: m.actionId, found });
         return;
       }
       case 'RUN_SELFTEST': {
@@ -90,6 +103,13 @@ export function startContent(): void {
         return;
       }
       case 'EXECUTE_ACTION': {
+        if (detectLoadError()) {
+          const ok = await healLoadError();
+          if (!ok) {
+            bridge.send({ type: 'ACTION_RESULT', actionId: m.action.id, ok: false, verified: false, error: 'экран ошибки загрузки не ушёл после повтора и перезагрузки' });
+            return;
+          }
+        }
         collector.stop();
         const r = await executeAction(m.action, m.selfHandle, m.likeBefore);
         bridge.send({ type: 'ACTION_RESULT', actionId: m.action.id, ...r });
