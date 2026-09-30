@@ -36,7 +36,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -108,6 +108,20 @@ async function runMigrationAutopilotComments(): Promise<void> {
   await patchSettings({ autoPostsPerDay: Math.max(cur.autoPostsPerDay, 5), limits: { ...cur.limits, 'publish-post': Math.max(cur.limits['publish-post'], 10) } });
   await flag.setValue(true);
   log('info', 'migration autopilot_comments_v1: comment-on-stranger → auto');
+}
+
+/** Автопостинг 5/день (согласовано 29.09). Отдельный флаг: прежний встал до того, как посты попали в миграцию. */
+async function runMigrationAutopost(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_autopost_v2', { fallback: false });
+  if (await flag.getValue()) return;
+  const { patchSettings, getSettings, autonomyItem } = await import('@/shared/settings');
+  const cur = await getSettings();
+  await patchSettings({ autoPostsPerDay: Math.max(cur.autoPostsPerDay, 5), limits: { ...cur.limits, 'publish-post': Math.max(cur.limits['publish-post'], 10) } });
+  const cfg = await autonomyItem.getValue();
+  await autonomyItem.setValue({ ...cfg, 'publish-post': 'auto' });
+  await flag.setValue(true);
+  log('info', 'migration autopost_v2: 5 постов/день, publish-post → auto');
 }
 
 /** Темп отправки по договорённости 29.09: 40–90 с (один раз в сохранённые настройки). */

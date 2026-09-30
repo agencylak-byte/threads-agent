@@ -156,8 +156,6 @@ export async function draftFor(a: Action, hint?: string): Promise<string> {
  */
 export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): Promise<void> {
   if (s.autoPostsPerDay <= 0 || !s.postTopics.length) return;
-  const autonomy = await autonomyItem.getValue();
-  if (autonomy['publish-post'] !== 'auto') return;
   const self = await selfHandleItem.getValue();
   if (!self) return;
   const { isWorkingHours } = await import('./pacing');
