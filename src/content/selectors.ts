@@ -83,10 +83,10 @@ export const SELECTORS = {
   /** Кнопка «Новая публикация» / «Создать» в меню или плейсхолдер «Пустое текстовое поле…» в ленте. */
   createPost: {
     candidates: [
-      'div[role="button"][aria-label^="Пустое текстовое поле"]',
-      `div[role="button"]:has(svg[aria-label="Новая публикация"]), div[role="button"]:has(svg[title="Новая публикация"])`,
       'div[role="button"]:has(svg[aria-label="Создать"]), a[aria-label="Создать"], div[role="button"][aria-label="Создать"]',
+      `div[role="button"]:has(svg[aria-label="Новая публикация"]), div[role="button"]:has(svg[title="Новая публикация"])`,
       'div[role="button"]:has(svg[aria-label="Create"]), div[role="button"][aria-label="Create"]',
+      'div[role="button"][aria-label^="Пустое текстовое поле"]',
     ],
     requiredOn: [],
   },

@@ -48,7 +48,7 @@ export async function executeInTab(action: Action): Promise<ExecResult> {
 }
 
 function targetUrl(action: Action, self: string): string {
-  if (action.type === 'publish-post') return URLS.profile(self);
+  if (action.type === 'publish-post') return URLS.feed;
   return action.threadUrl ?? URLS.feed;
 }
 

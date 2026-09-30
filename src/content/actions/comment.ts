@@ -69,10 +69,14 @@ export async function commentOnPost(t: CommentTarget): Promise<ExecResult> {
   let editor: HTMLElement | null = null;
   const inline = findInlineReplyEditor(handle);
   if (inline && inline.offsetParent !== null) {
-    editor = inline;
     scrollIntoViewSmooth(inline);
     await sleep(500);
+    inline.click();
     inline.focus();
+    await sleep(700);
+    // в мобильной вёрстке клик по полю открывает модальный composer — тогда печатаем туда
+    const dialogEditor = document.querySelector<HTMLElement>('div[role="dialog"] div[contenteditable="true"]');
+    editor = dialogEditor && dialogEditor.offsetParent !== null ? dialogEditor : inline;
   } else {
     // кнопки под постом могут дорисоваться позже карточки — ждём именно кнопку, перечитывая карточку
     const reply = await waitFor(() => {

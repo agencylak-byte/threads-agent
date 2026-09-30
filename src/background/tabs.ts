@@ -5,6 +5,9 @@ import type { ContentToSw } from '@/shared/messages';
 
 // Одна «рабочая» вкладка threads.com. Все джобы и действия идут через неё.
 
+/** Ширина рабочего окна: ≥ 1280, чтобы Threads рисовал десктопную вёрстку (в мобильной поле ответа открывает модалку). */
+const WORK_WIDTH = 1280;
+
 function isThreadsUrl(url?: string): boolean {
   return !!url && /^https:\/\/(www\.)?threads\.com\//.test(url);
 }
@@ -82,6 +85,12 @@ export async function tidyWorkWindows(): Promise<void> {
   const keep = ours.find((w) => w.windowId === saved) ?? ours[0]!;
   await workWindowItem.setValue(keep.windowId);
   await workTabItem.setValue(keep.tabId);
+  try {
+    const win = await browser.windows.get(keep.windowId);
+    if ((win.width ?? 0) < 1200 || win.state === 'minimized') await browser.windows.update(keep.windowId, { state: 'normal', width: WORK_WIDTH, height: Math.max(win.height ?? 0, 800) });
+  } catch {
+    /* окно могло закрыться */
+  }
   for (const w of ours) if (w.windowId !== keep.windowId) await browser.windows.remove(w.windowId).catch(() => undefined);
 }
 
@@ -120,7 +129,7 @@ async function resolveDedicatedWorkTab(create: boolean): Promise<number> {
     await workTabItem.setValue(anyThreads.id);
     return anyThreads.id;
   }
-  const w = await browser.windows.create({ url: THREADS_ORIGIN + '/', type: 'normal', width: 960, height: 900, left: 40, top: 40, focused: false });
+  const w = await browser.windows.create({ url: THREADS_ORIGIN + '/', type: 'normal', width: WORK_WIDTH, height: 900, left: 40, top: 40, focused: false });
   const tab = w?.tabs?.[0];
   if (!w || w.id === undefined || tab?.id === undefined) throw new Error('Не удалось открыть рабочее окно');
   await workWindowItem.setValue(w.id);

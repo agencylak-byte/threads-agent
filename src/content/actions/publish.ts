@@ -23,10 +23,23 @@ export async function publishPost(text: string, selfHandle: string): Promise<Exe
   btn.click();
   let editor: HTMLElement;
   try {
-    editor = await waitForEditor();
+    editor = await waitForEditor(document, 12_000);
   } catch {
-    return { ok: false, verified: false, error: 'composer не открылся' };
+    // второй способ: плейсхолдер «Что нового?» / «Пустое текстовое поле» в ленте
+    const ph = document.querySelector<HTMLElement>('div[role="button"][aria-label^="Пустое текстовое поле"]');
+    if (!ph) return { ok: false, verified: false, error: 'composer не открылся' };
+    ph.click();
+    try {
+      editor = await waitForEditor(document, 10_000);
+    } catch {
+      return { ok: false, verified: false, error: 'composer не открылся (ни «Создать», ни плейсхолдер)' };
+    }
   }
+  editor.click();
+  editor.focus();
+  await sleep(600);
+  const dlg = document.querySelector<HTMLElement>('div[role="dialog"] div[contenteditable="true"]');
+  if (dlg && dlg.offsetParent !== null) editor = dlg;
   await sleep(1500 + Math.random() * 1500);
   try {
     await typeInto(editor, text);
