@@ -34,7 +34,21 @@ function dayBounds(now: number, timezone: string): [number, number] {
   return [start, start + 86_400_000];
 }
 
+/** Действия, зависшие в «отправляется» (service worker уснул посреди отправки) → обратно в очередь. */
+export async function recoverStuckExecuting(now = Date.now(), maxAgeMs = 4 * 60_000): Promise<number> {
+  let n = 0;
+  for (const a of await listActionsByStatus(['executing'], 200)) {
+    if (!a.executingAt || now - a.executingAt > maxAgeMs) {
+      await updateAction(a.id, { status: 'queued', error: 'отправка прервалась (фон уснул) — повтор', scheduledFor: now + 30_000 });
+      n++;
+    }
+  }
+  if (n) log('info', `recovered ${n} stuck executing actions`);
+  return n;
+}
+
 export async function dispatchOnce(execute: Executor, now = Date.now()): Promise<'idle' | 'executed' | 'deferred' | 'blocked'> {
+  await recoverStuckExecuting(now);
   let engine = resumeIfDue(await engineStateItem.getValue(), now);
   const settings = await getSettings();
   // «спал» вне рабочих часов — окно открылось, просыпаемся
@@ -69,7 +83,7 @@ export async function dispatchOnce(execute: Executor, now = Date.now()): Promise
     await engineStateItem.setValue({ ...engine, status: 'running' });
   }
 
-  await updateAction(action.id, { status: 'executing', attempts: action.attempts + 1 });
+  await updateAction(action.id, { status: 'executing', attempts: action.attempts + 1, executingAt: now });
   const result = await execute({ ...action, finalText: action.finalText ?? action.draftText });
   await applyResult(action, result, now);
   return 'executed';

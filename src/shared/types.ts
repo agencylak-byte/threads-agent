@@ -123,6 +123,7 @@ export interface Action {
   decidedAt?: number;
   scheduledFor?: number;
   executedAt?: number;
+  executingAt?: number;
   verifiedAt?: number;
   error?: string;
   rejectReason?: string;

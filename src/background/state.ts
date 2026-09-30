@@ -101,7 +101,7 @@ function fmtTime(ts: number, tz: string): string {
 /** Человеческое объяснение, что происходит с отправкой одобренных. */
 async function describeDispatch(engine: EngineState, settings: Settings, hasKey: boolean): Promise<string> {
   const now = Date.now();
-  const queued = (await listActionsByStatus(['queued'], 100)).filter((a) => a.draftText || a.finalText);
+  const queued = (await listActionsByStatus(['queued', 'executing'], 100)).filter((a) => a.draftText || a.finalText);
   if (!hasKey) return 'Не задан ключ OpenRouter.';
   if (engine.status === 'stopped') return 'Движок остановлен — «Здоровье» → «Запустить».';
   if (engine.status === 'paused') return `Пауза после аномалии до ${engine.pausedUntil ? fmtTime(engine.pausedUntil, settings.timezone) : '—'}: ${engine.pauseReason ?? ''}`;

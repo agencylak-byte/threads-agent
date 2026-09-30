@@ -21,6 +21,12 @@ export async function typeInto(editor: HTMLElement, text: string): Promise<void>
     pasteInto(editor, text);
     await sleep(300);
   }
+  if (!editorContains(editor, text)) {
+    clearEditor(editor);
+    editor.focus();
+    editor.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true }));
+    await sleep(400);
+  }
   if (!editorContains(editor, text)) throw new Error('ввод не отобразился в редакторе');
   // подстраховка для React/Lexical: явное input-событие, чтобы состояние формы обновилось
   editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text.slice(-1) }));

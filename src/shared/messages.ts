@@ -39,7 +39,8 @@ export type ContentToSw =
   | { type: 'ACTION_RESULT'; actionId: string; ok: boolean; verified: boolean; error?: string; resultUrl?: string; debugHtml?: string }
   | { type: 'ANOMALY'; anomaly: Anomaly }
   | { type: 'SELFTEST_RESULT'; page: string; broken: string[] }
-  | { type: 'PAGE_DUMP'; page: string; html: string };
+  | { type: 'PAGE_DUMP'; page: string; html: string }
+  | { type: 'HEARTBEAT' };
 
 export type SwToContent =
   | { type: 'NAVIGATE'; url: string }

@@ -45,7 +45,26 @@ export function startContent(): void {
 
   bridge.onMessage((m: SwToContent) => void handleCommand(m).catch((e) => console.warn('[threads-agent] command failed', e)));
 
+  let pulse: number | null = null;
+  const startPulse = () => {
+    if (pulse !== null) return;
+    pulse = window.setInterval(() => bridge.send({ type: 'HEARTBEAT' }), 10_000);
+  };
+  const stopPulse = () => {
+    if (pulse !== null) clearInterval(pulse);
+    pulse = null;
+  };
+
   async function handleCommand(m: SwToContent): Promise<void> {
+    if (m.type === 'COLLECT' || m.type === 'EXECUTE_ACTION') startPulse();
+    try {
+      await handleCommandInner(m);
+    } finally {
+      if (m.type === 'COLLECT' || m.type === 'EXECUTE_ACTION') stopPulse();
+    }
+  }
+
+  async function handleCommandInner(m: SwToContent): Promise<void> {
     switch (m.type) {
       case 'NAVIGATE': {
         // SW уже перевёл вкладку через tabs.update; если URL совпадает — просто подтверждаем готовность
