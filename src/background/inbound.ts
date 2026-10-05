@@ -45,6 +45,15 @@ async function handle(m: ContentToSw): Promise<void> {
         const current = await selfHandleItem.getValue();
         if (current !== m.selfHandle) {
           await selfHandleItem.setValue(m.selfHandle);
+          if (current) {
+            // смена аккаунта: разгон лимитов заново, серия неподтверждённых — с нуля
+            const { patchSettings, engineStateItem } = await import('@/shared/settings');
+            await patchSettings({ rampStartAt: Date.now() });
+            const st = await engineStateItem.getValue();
+            await engineStateItem.setValue({ ...st, unverifiedStreak: 0 });
+            const { addEvent } = await import('@/db/repo-events');
+            await addEvent({ at: Date.now(), kind: 'info', message: `аккаунт сменён: @${current} → @${m.selfHandle}, разгон лимитов заново` });
+          }
           broadcast('state');
         }
       }

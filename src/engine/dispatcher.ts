@@ -85,7 +85,7 @@ export async function dispatchOnce(execute: Executor, now = Date.now()): Promise
   if (!queued.length) return 'idle';
 
   const [dayStart, dayEnd] = dayBounds(now, settings.timezone);
-  const todayExecuted = await listExecutedBetween(dayStart, dayEnd);
+  const todayExecuted = (await listExecutedBetween(dayStart, dayEnd)).filter((a) => a.status === 'done');
   const lastAll = todayExecuted.reduce<number | undefined>((m, a) => Math.max(m ?? 0, a.executedAt ?? 0) || m, undefined);
 
   // идём по очереди: первое действие, которому пейсинг разрешает отправку сейчас (лимиты — по типам)
@@ -204,7 +204,7 @@ export type Verifier = (action: Action) => Promise<boolean | null>; // null — 
 /** Повторная проверка неподтверждённых отправок (задача 3 из разбора): нашлось → done+verified, нет → failed. */
 export async function reverifyOnce(verify: Verifier, now = Date.now()): Promise<'idle' | 'checked'> {
   const due = (await listActionsByStatus(['done'], 300)).filter(
-    (a) => a.outcome.verified === false && !a.outcome.reverified && a.verifyAfter !== undefined && a.verifyAfter <= now && a.threadUrl,
+    (a) => a.outcome.verified === false && !a.outcome.reverified && a.verifyAfter !== undefined && a.verifyAfter <= now && (a.threadUrl || a.type === 'publish-post'),
   );
   const a = due[0];
   if (!a) return 'idle';

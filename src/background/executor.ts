@@ -87,10 +87,11 @@ const isVerifyResult = (id: string) => (m: ContentToSw): m is Extract<ContentToS
 /** Открыть тред и проверить, есть ли там наш комментарий. null — не удалось проверить (вкладка/порт). */
 export async function verifyInTab(action: Action): Promise<boolean | null> {
   const self = await selfHandleItem.getValue();
-  if (!self || !action.threadUrl) return null;
+  const url = action.type === 'publish-post' ? URLS.profile(self ?? '') : action.threadUrl;
+  if (!self || !url) return null;
   try {
     const tabId = await getWorkTab();
-    await navigateWorkTab(action.threadUrl);
+    await navigateWorkTab(url);
     const res = waitForMessage(tabId, isVerifyResult(action.id), 30_000);
     if (!sendToTab(tabId, { type: 'VERIFY_REPLY', actionId: action.id, selfHandle: self, text: action.finalText ?? action.draftText ?? '' })) return null;
     return (await res).found;
