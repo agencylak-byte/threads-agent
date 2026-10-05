@@ -1,5 +1,4 @@
 import { sleep, waitFor } from '../dom-utils';
-import { typingDelayMs } from '@/engine/pacing';
 
 // Человекоподобный ввод в contenteditable (Lexical-подобный редактор Threads).
 // Стратегия 1: execCommand('insertText') посимвольно — React видит input-события.
@@ -10,9 +9,11 @@ export async function typeInto(editor: HTMLElement, text: string): Promise<void>
   editor.focus();
   await sleep(150);
   selectAllIn(editor);
+  // Целиком одним вызовом: посимвольный ввод с паузами в скрытом окне Chrome троттлит таймеры
+  // до раза в минуту — отправка не успевала (1–4.10 ни одной отправки). Threads видит только итоговый текст.
   let ok = false;
   try {
-    ok = await typeByChars(editor, text);
+    ok = document.execCommand('insertText', false, text);
   } catch {
     ok = false;
   }
@@ -31,15 +32,6 @@ export async function typeInto(editor: HTMLElement, text: string): Promise<void>
   // подстраховка для React/Lexical: явное input-событие, чтобы состояние формы обновилось
   editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text.slice(-1) }));
   await sleep(300);
-}
-
-async function typeByChars(editor: HTMLElement, text: string): Promise<boolean> {
-  for (const ch of text) {
-    const inserted = document.execCommand('insertText', false, ch);
-    if (!inserted) return false;
-    await sleep(typingDelayMs());
-  }
-  return true;
 }
 
 function pasteInto(editor: HTMLElement, text: string): void {

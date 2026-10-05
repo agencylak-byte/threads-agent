@@ -3,6 +3,7 @@ import { runWatchdog } from './watchdog';
 import { setActivityHook, setCollectHook, setDispatchHook, setReverifyHook, tick } from '@/engine/scheduler';
 import { dispatchOnce, reverifyOnce } from '@/engine/dispatcher';
 import { isJobRunning, runJob } from './jobs';
+import { withKeepAlive } from './ports';
 import { executeInTab, initAnomalyHandling, verifyInTab } from './executor';
 import { dailyMetrics } from './daily';
 import { broadcast } from './state';
@@ -15,8 +16,8 @@ export function initEngine(): void {
   initAnomalyHandling();
   setDispatchHook(async () => {
     if (isJobRunning()) return; // не мешаем сбору
-    // за один тик — не больше одного записывающего действия
-    const r = await dispatchOnce(executeInTab);
+    // за один тик — не больше одного записывающего действия; SW держим живым всю отправку
+    const r = await withKeepAlive(() => dispatchOnce(executeInTab));
     if (r === 'executed') broadcast('actions');
   });
   setActivityHook(async () => {
@@ -29,7 +30,7 @@ export function initEngine(): void {
     if (isJobRunning()) return;
     const st = await engineStateItem.getValue();
     if (st.status !== 'running') return;
-    await reverifyOnce(verifyInTab);
+    await withKeepAlive(() => reverifyOnce(verifyInTab));
   });
   setCollectHook(async () => {
     if (isJobRunning()) return;

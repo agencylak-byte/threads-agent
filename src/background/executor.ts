@@ -1,5 +1,5 @@
 import { URLS } from '@/content/selectors';
-import { getSettings, selfHandleItem, engineStateItem } from '@/shared/settings';
+import { getSettings, selfHandleItem, engineStateItem, windowHiddenItem } from '@/shared/settings';
 import { log } from '@/shared/log';
 import type { Action } from '@/shared/types';
 import type { ContentToSw } from '@/shared/messages';
@@ -28,7 +28,11 @@ export async function executeInTab(action: Action): Promise<ExecResult> {
       return { ok: false, verified: false, error: 'content script не подключён', transient: true };
     }
     const r = await res;
-    if (!r.ok && /экран ошибки загрузки/.test(r.error ?? '')) return { ok: false, verified: false, error: r.error, transient: true };
+    if (!r.ok && /экран ошибки загрузки|окно Threads скрыто/.test(r.error ?? '')) {
+      await windowHiddenItem.setValue(/окно Threads скрыто/.test(r.error ?? '') ? Date.now() : 0);
+      return { ok: false, verified: false, error: r.error, transient: true };
+    }
+    await windowHiddenItem.setValue(0);
     if (r.debugHtml) {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       browser.downloads

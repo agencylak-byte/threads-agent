@@ -104,7 +104,8 @@ export async function classifyStep(): Promise<number> {
 export async function planStep(): Promise<void> {
   const [settings, autonomy, selfHandle] = await Promise.all([getSettings(), autonomyItem.getValue(), selfHandleItem.getValue()]);
   if (!selfHandle) return;
-  await planComments({ settings, autonomy, selfHandle });
+  const backlog = (await listActionsByStatus(['proposed', 'queued'], 1000)).filter((a) => a.type === 'comment-on-stranger').length;
+  if (backlog < settings.limits['comment-on-stranger'] * 3) await planComments({ settings, autonomy, selfHandle });
   await planReplies({ settings, autonomy, selfHandle });
 }
 

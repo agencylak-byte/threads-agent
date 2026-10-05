@@ -6,7 +6,7 @@ import { countAuthors } from '@/db/repo-authors';
 import { countActionsByStatus } from '@/db/repo-actions';
 import { countEvents } from '@/db/repo-events';
 import { dateKey, getMetrics } from '@/db/repo-metrics';
-import { apiKeyItem, engineStateItem, getSettings, selfHandleItem, voiceProfileItem } from '@/shared/settings';
+import { apiKeyItem, engineStateItem, getSettings, selfHandleItem, voiceProfileItem, windowHiddenItem } from '@/shared/settings';
 import type { JobRequest, StateSnapshot, SwToUi } from '@/shared/messages';
 import type { EngineState } from '@/shared/types';
 import type { Settings } from '@/shared/settings';
@@ -110,6 +110,9 @@ async function describeDispatch(engine: EngineState, settings: Settings, hasKey:
   if (engine.status === 'paused') return `Пауза после аномалии до ${engine.pausedUntil ? fmtTime(engine.pausedUntil, settings.timezone) : '—'}: ${engine.pauseReason ?? ''}`;
   if (!queued.length) return 'Одобренных к отправке нет.';
   if (isJobRunning()) return `Идёт сбор (${currentJob?.kind ?? ''}) — отправка продолжится после него.`;
+  const hiddenAt = await windowHiddenItem.getValue();
+  if (hiddenAt && now - hiddenAt < 30 * 60_000)
+    return 'Окно Threads закрыто другими окнами, Chrome его усыпляет и отправка не идёт. Оставьте краешек этого окна видимым на экране (или на втором мониторе).';
   if (!isWorkingHours(now, settings)) return `Вне рабочего окна ${settings.workingHours.start}–${settings.workingHours.end} (${settings.timezone}). Продолжу утром.`;
   const order = (t: string) => (t === 'publish-post' ? 0 : t === 'reply-own-post' ? 1 : 4);
   const first = queued.sort((a, b) => order(a.type) - order(b.type) || (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt))[0]!;

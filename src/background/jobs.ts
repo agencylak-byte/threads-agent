@@ -33,6 +33,11 @@ export function requestStop(): void {
 }
 
 export async function runJob(job: JobRequest): Promise<{ ok: boolean; error?: string }> {
+  const { withKeepAlive } = await import('./ports');
+  return withKeepAlive(() => runJobInner(job));
+}
+
+async function runJobInner(job: JobRequest): Promise<{ ok: boolean; error?: string }> {
   if (running) return { ok: false, error: 'Уже идёт другой сбор' };
   running = true;
   stopRequested = false;

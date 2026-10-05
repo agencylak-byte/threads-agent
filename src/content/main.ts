@@ -103,6 +103,10 @@ export function startContent(): void {
         return;
       }
       case 'EXECUTE_ACTION': {
+        if (document.visibilityState === 'hidden') {
+          bridge.send({ type: 'ACTION_RESULT', actionId: m.action.id, ok: false, verified: false, error: 'окно Threads скрыто другими окнами — Chrome его усыпляет' });
+          return;
+        }
         if (detectLoadError()) {
           const ok = await healLoadError();
           if (!ok) {

@@ -80,3 +80,13 @@ export async function waitForPort(tabId: number, timeoutMs = 20_000): Promise<vo
     await new Promise((r) => setTimeout(r, 200));
   }
 }
+
+/** Держит service worker живым: вызов API расширения сбрасывает 30-секундный таймер простоя MV3. */
+export async function withKeepAlive<T>(fn: () => Promise<T>): Promise<T> {
+  const t = setInterval(() => void browser.runtime.getPlatformInfo().catch(() => undefined), 20_000);
+  try {
+    return await fn();
+  } finally {
+    clearInterval(t);
+  }
+}

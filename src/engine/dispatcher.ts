@@ -46,8 +46,28 @@ export async function recoverStuckExecuting(now = Date.now(), maxAgeMs = 4 * 60_
   return n;
 }
 
+/** Комментарии к постам старше maxPostAgeDays из очереди — в expired (поздно, выглядит странно). */
+export async function expireStaleQueued(now = Date.now()): Promise<number> {
+  const settings = await getSettings();
+  const { getPost } = await import('@/db/repo-posts');
+  const maxAge = settings.maxPostAgeDays * 86_400_000;
+  let n = 0;
+  for (const a of await listActionsByStatus(['queued', 'proposed'], 1000)) {
+    if (a.type !== 'comment-on-stranger' || !a.targetPostId) continue;
+    const p = await getPost(a.targetPostId);
+    const ref = p?.postedAt ?? p?.firstSeenAt ?? a.createdAt;
+    if (now - ref > maxAge) {
+      await updateAction(a.id, { status: 'expired', rejectReason: 'пост старше недели — комментировать поздно', decidedAt: now });
+      n++;
+    }
+  }
+  if (n) log('info', `expired ${n} stale queued comments`);
+  return n;
+}
+
 export async function dispatchOnce(execute: Executor, now = Date.now()): Promise<'idle' | 'executed' | 'deferred' | 'blocked'> {
   await recoverStuckExecuting(now);
+  if (Math.random() < 0.1) await expireStaleQueued(now);
   let engine = resumeIfDue(await engineStateItem.getValue(), now);
   const settings = await getSettings();
   // «спал» вне рабочих часов — окно открылось, просыпаемся
