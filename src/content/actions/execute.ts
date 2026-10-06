@@ -39,7 +39,7 @@ export async function executeAction(action: Action, selfHandle: string, likeBefo
   }
   const post = detectAnomaly();
   if (post && r.ok) r = { ...r, ok: false, verified: false, error: `аномалия после действия: ${post.kind}` };
-  if (!r.ok || !r.verified) r.debugHtml = safeDump();
+  if (!r.ok || !r.verified) r.debugHtml = `<!-- result: ${r.ok ? 'отправлено, не подтверждено' : r.error ?? ''} -->\n` + (safeDump() ?? '');
   return r;
 }
 

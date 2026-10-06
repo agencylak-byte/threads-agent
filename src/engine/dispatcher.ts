@@ -26,7 +26,7 @@ export type Executor = (action: Action) => Promise<ExecResult>;
 
 
 /** Начало текущего дня в TZ (по dateKey) — приближённо через поиск полуночи. */
-function dayBounds(now: number, timezone: string): [number, number] {
+export function dayBounds(now: number, timezone: string): [number, number] {
   const key = dateKey(now, timezone);
   let start = now;
   while (dateKey(start - 60_000, timezone) === key) start -= 60_000;
@@ -85,7 +85,8 @@ export async function dispatchOnce(execute: Executor, now = Date.now()): Promise
   if (!queued.length) return 'idle';
 
   const [dayStart, dayEnd] = dayBounds(now, settings.timezone);
-  const todayExecuted = (await listExecutedBetween(dayStart, dayEnd)).filter((a) => a.status === 'done');
+  // отправки другого аккаунта (до смены, rampStartAt) в сегодняшний лимит не входят
+  const todayExecuted = (await listExecutedBetween(Math.max(dayStart, settings.rampStartAt ?? 0), dayEnd)).filter((a) => a.status === 'done');
   const lastAll = todayExecuted.reduce<number | undefined>((m, a) => Math.max(m ?? 0, a.executedAt ?? 0) || m, undefined);
 
   // идём по очереди: первое действие, которому пейсинг разрешает отправку сейчас (лимиты — по типам)

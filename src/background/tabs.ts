@@ -195,10 +195,10 @@ function samePage(a: string, b: string): boolean {
 const isPageReady = (m: ContentToSw): m is Extract<ContentToSw, { type: 'PAGE_READY' }> => m.type === 'PAGE_READY';
 
 /** Переходим по URL и ждём PAGE_READY от content-скрипта. */
-export async function navigateWorkTab(url: string, timeoutMs = 25_000): Promise<{ selfHandle?: string }> {
+export async function navigateWorkTab(url: string, timeoutMs = 25_000, forceReload = false): Promise<{ selfHandle?: string }> {
   const tabId = await getWorkTab();
   const tab = await browser.tabs.get(tabId);
-  if (tab.url && samePage(tab.url, url)) {
+  if (tab.url && samePage(tab.url, url) && !forceReload) {
     const hasPort = await waitForPort(tabId, 5000).then(() => true).catch(() => false);
     if (hasPort) {
       // страница уже открыта — просим content подтвердить готовность

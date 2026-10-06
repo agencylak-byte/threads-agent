@@ -204,7 +204,7 @@ export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): 
   const todayKey = dk(Date.now(), s.timezone);
   let dayStart = Date.now();
   while (dk(dayStart - 60_000, s.timezone) === todayKey) dayStart -= 60_000;
-  const publishedToday = (await listExecutedBetween(dayStart, Date.now() + 1)).filter((a) => a.type === 'publish-post');
+  const publishedToday = (await listExecutedBetween(Math.max(dayStart, s.rampStartAt ?? 0), Date.now() + 1)).filter((a) => a.type === 'publish-post' && a.status === 'done');
   if (publishedToday.length >= s.autoPostsPerDay) return;
   const last = publishedToday.reduce((m, a) => Math.max(m, a.executedAt ?? 0), 0);
   // шаг — от длины рабочего окна

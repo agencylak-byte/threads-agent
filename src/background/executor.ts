@@ -33,7 +33,13 @@ export async function executeInTab(action: Action): Promise<ExecResult> {
       return { ok: false, verified: false, error: r.error, transient: true };
     }
     await windowHiddenItem.setValue(0);
-    if (r.debugHtml) {
+    let verified = r.verified;
+    if (r.ok && !verified) {
+      // свой ответ Threads часто дорисовывает только после перезагрузки — проверяем сразу, а не через 15–25 мин
+      await new Promise((res) => setTimeout(res, 4000));
+      verified = (await verifyInTab({ ...action, finalText: action.finalText ?? action.draftText }, true)) === true;
+    }
+    if (r.debugHtml && !verified) {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       browser.downloads
         .download({
@@ -43,7 +49,7 @@ export async function executeInTab(action: Action): Promise<ExecResult> {
         })
         .catch(() => undefined);
     }
-    return { ok: r.ok, verified: r.verified, error: r.error, resultUrl: r.resultUrl };
+    return { ok: r.ok, verified, error: r.error, resultUrl: r.resultUrl };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const transient = /вкладк|content script|timeout waiting for content|did not connect/i.test(msg);
@@ -85,13 +91,13 @@ const isVerifyResult = (id: string) => (m: ContentToSw): m is Extract<ContentToS
   m.type === 'VERIFY_RESULT' && m.actionId === id;
 
 /** Открыть тред и проверить, есть ли там наш комментарий. null — не удалось проверить (вкладка/порт). */
-export async function verifyInTab(action: Action): Promise<boolean | null> {
+export async function verifyInTab(action: Action, forceReload = false): Promise<boolean | null> {
   const self = await selfHandleItem.getValue();
   const url = action.type === 'publish-post' ? URLS.profile(self ?? '') : action.threadUrl;
   if (!self || !url) return null;
   try {
     const tabId = await getWorkTab();
-    await navigateWorkTab(url);
+    await navigateWorkTab(url, 25_000, forceReload);
     const res = waitForMessage(tabId, isVerifyResult(action.id), 30_000);
     if (!sendToTab(tabId, { type: 'VERIFY_REPLY', actionId: action.id, selfHandle: self, text: action.finalText ?? action.draftText ?? '' })) return null;
     return (await res).found;
