@@ -1,6 +1,6 @@
 {
   "name": "threads-agent",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "description": "Threads-агент LAK — Chrome-расширение: сбор базы, черновики комментариев/постов в голосе Леры, второй пилот с переходом в автопилот",
   "type": "module",
