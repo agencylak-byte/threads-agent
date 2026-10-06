@@ -6,7 +6,36 @@ import type { ContentToSw } from '@/shared/messages';
 // Одна «рабочая» вкладка threads.com. Все джобы и действия идут через неё.
 
 /** Ширина рабочего окна: ≥ 1280, чтобы Threads рисовал десктопную вёрстку (в мобильной поле ответа открывает модалку). */
-const WORK_WIDTH = 1280;
+/** Компактное окно в углу: 660×600 при масштабе 50% = десктопная вёрстка (1320 CSS px), а на экране мало места. */
+const COMPACT = { width: 660, height: 600, zoom: 0.5 };
+
+/** Правый нижний угол экрана, на котором сейчас окно Леры. */
+async function cornerPosition(): Promise<{ left: number; top: number }> {
+  try {
+    const all = await browser.windows.getAll({ windowTypes: ['normal'] });
+    const f = all.find((w) => w.focused) ?? all[0];
+    if (f && f.left !== undefined && f.width !== undefined && f.top !== undefined && f.height !== undefined) {
+      return { left: Math.max(0, f.left + f.width - COMPACT.width), top: Math.max(0, f.top + f.height - COMPACT.height) };
+    }
+  } catch {
+    /* нет окон */
+  }
+  return { left: 40, top: 40 };
+}
+
+async function applyCompact(windowId: number, tabId: number): Promise<void> {
+  try {
+    const win = await browser.windows.get(windowId);
+    if (win.state === 'minimized' || Math.abs((win.width ?? 0) - COMPACT.width) > 40 || Math.abs((win.height ?? 0) - COMPACT.height) > 40) {
+      const pos = await cornerPosition();
+      await browser.windows.update(windowId, { state: 'normal', width: COMPACT.width, height: COMPACT.height, ...pos });
+    }
+    const z = await browser.tabs.getZoom(tabId);
+    if (Math.abs(z - COMPACT.zoom) > 0.01) await browser.tabs.setZoom(tabId, COMPACT.zoom);
+  } catch {
+    /* окно могло закрыться */
+  }
+}
 
 function isThreadsUrl(url?: string): boolean {
   return !!url && /^https:\/\/(www\.)?threads\.com\//.test(url);
@@ -85,12 +114,7 @@ export async function tidyWorkWindows(): Promise<void> {
   const keep = ours.find((w) => w.windowId === saved) ?? ours[0]!;
   await workWindowItem.setValue(keep.windowId);
   await workTabItem.setValue(keep.tabId);
-  try {
-    const win = await browser.windows.get(keep.windowId);
-    if ((win.width ?? 0) < 1200 || win.state === 'minimized') await browser.windows.update(keep.windowId, { state: 'normal', width: WORK_WIDTH, height: Math.max(win.height ?? 0, 800) });
-  } catch {
-    /* окно могло закрыться */
-  }
+  await applyCompact(keep.windowId, keep.tabId);
   for (const w of ours) if (w.windowId !== keep.windowId) await browser.windows.remove(w.windowId).catch(() => undefined);
 }
 
@@ -129,12 +153,14 @@ async function resolveDedicatedWorkTab(create: boolean): Promise<number> {
     await workTabItem.setValue(anyThreads.id);
     return anyThreads.id;
   }
-  const w = await browser.windows.create({ url: THREADS_ORIGIN + '/', type: 'normal', width: WORK_WIDTH, height: 900, left: 40, top: 40, focused: false });
+  const pos = await cornerPosition();
+  const w = await browser.windows.create({ url: THREADS_ORIGIN + '/', type: 'normal', width: COMPACT.width, height: COMPACT.height, ...pos, focused: false });
   const tab = w?.tabs?.[0];
   if (!w || w.id === undefined || tab?.id === undefined) throw new Error('Не удалось открыть рабочее окно');
   await workWindowItem.setValue(w.id);
   await workTabItem.setValue(tab.id);
   await lastWindowCreateItem.setValue(Date.now());
+  await browser.tabs.setZoom(tab.id, COMPACT.zoom).catch(() => undefined);
   return tab.id;
 }
 

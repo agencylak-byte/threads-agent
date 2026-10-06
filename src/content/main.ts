@@ -103,7 +103,7 @@ export function startContent(): void {
         return;
       }
       case 'EXECUTE_ACTION': {
-        if (document.visibilityState === 'hidden') {
+        if (document.visibilityState === 'hidden' && !(await waitVisible(3000))) {
           bridge.send({ type: 'ACTION_RESULT', actionId: m.action.id, ok: false, verified: false, error: 'окно Threads скрыто другими окнами — Chrome его усыпляет' });
           return;
         }
@@ -161,4 +161,12 @@ function passiveSource(kind: ReturnType<typeof pageKind>, url: string): [PostSou
     default:
       return [null, undefined];
   }
+}
+
+async function waitVisible(ms: number): Promise<boolean> {
+  if (document.visibilityState === 'visible') return true;
+  return new Promise((res) => {
+    const t = setTimeout(() => res(false), ms);
+    document.addEventListener('visibilitychange', () => { clearTimeout(t); res(document.visibilityState === 'visible'); }, { once: true });
+  });
 }

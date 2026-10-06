@@ -112,7 +112,7 @@ async function describeDispatch(engine: EngineState, settings: Settings, hasKey:
   if (isJobRunning()) return `Идёт сбор (${currentJob?.kind ?? ''}) — отправка продолжится после него.`;
   const hiddenAt = await windowHiddenItem.getValue();
   if (hiddenAt && now - hiddenAt < 30 * 60_000)
-    return 'Окно Threads закрыто другими окнами, Chrome его усыпляет и отправка не идёт. Оставьте краешек этого окна видимым на экране (или на втором мониторе).';
+    return 'Маленькое окно Threads в правом нижнем углу закрыто другими окнами — Chrome его усыпляет и отправка не идёт. Оставьте этот угол экрана свободным.';
   if (!isWorkingHours(now, settings)) return `Вне рабочего окна ${settings.workingHours.start}–${settings.workingHours.end} (${settings.timezone}). Продолжу утром.`;
   const order = (t: string) => (t === 'publish-post' ? 0 : t === 'reply-own-post' ? 1 : 4);
   const first = queued.sort((a, b) => order(a.type) - order(b.type) || (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt))[0]!;
