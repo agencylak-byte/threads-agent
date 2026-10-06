@@ -197,7 +197,8 @@ export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): 
   const { isWorkingHours } = await import('./pacing');
   if (!isWorkingHours(Date.now(), s)) return;
   const { listActionsByStatus, listExecutedBetween, createAction, makeDedupeKey } = await import('@/db/repo-actions');
-  const pending = (await listActionsByStatus(['proposed', 'queued', 'executing'], 100)).filter((a) => a.type === 'publish-post');
+  // пост, ждущий ручной проверки (защита цифр), автопостинг не держит
+  const pending = (await listActionsByStatus(['proposed', 'queued', 'executing'], 100)).filter((a) => a.type === 'publish-post' && !(a.status === 'proposed' && a.needsReview));
   if (pending.length) return;
   // «сегодня» — по календарю в таймзоне настроек, а не последние 24 часа
   const { dateKey: dk } = await import('@/db/repo-metrics');
@@ -211,7 +212,11 @@ export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): 
   const [sh, sm] = s.workingHours.start.split(':').map(Number);
   const [eh, em] = s.workingHours.end.split(':').map(Number);
   const windowMs = Math.max(60, (eh ?? 21) * 60 + (em ?? 0) - ((sh ?? 9) * 60 + (sm ?? 30))) * 60_000;
-  const minSpacingMs = windowMs / (s.autoPostsPerDay + 1);
+  // если день начался со сбоев — догоняем: оставшиеся посты равномерно на оставшееся рабочее время
+  const nowLocal = new Intl.DateTimeFormat('en-GB', { timeZone: s.timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()).split(':').map(Number);
+  const leftMs = Math.max(0, (eh ?? 21) * 60 + (em ?? 0) - ((nowLocal[0] ?? 0) * 60 + (nowLocal[1] ?? 0))) * 60_000;
+  const remaining = s.autoPostsPerDay - publishedToday.length;
+  const minSpacingMs = Math.min(windowMs / (s.autoPostsPerDay + 1), leftMs / Math.max(1, remaining));
   if (last && Date.now() - last < minSpacingMs) return;
 
   // тема: первая по кругу, которой не было последние 14 дней
@@ -226,8 +231,11 @@ export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): 
     }
   }
   if (!topic) {
-    log('info', 'autopost: все темы использованы за 14 дней — добавьте темы в «Источниках»');
-    return;
+    // все темы были за 14 дней (в т.ч. на несостоявшихся постах) — берём самую давнюю, а не молчим
+    const lastAt = new Map(fresh.map((h) => [h.topic, h.at]));
+    topic = [...s.postTopics].sort((a, b) => (lastAt.get(a) ?? 0) - (lastAt.get(b) ?? 0))[0];
+    if (!topic) return;
+    log('info', `autopost: все темы были за 14 дней — беру самую давнюю: ${topic}`);
   }
   const { draftPost } = await import('@/llm/tasks/post-draft');
   const { listPostsByAuthor } = await import('@/db/repo-posts');

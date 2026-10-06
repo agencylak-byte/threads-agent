@@ -6,8 +6,8 @@ import type { ContentToSw } from '@/shared/messages';
 // Одна «рабочая» вкладка threads.com. Все джобы и действия идут через неё.
 
 /** Ширина рабочего окна: ≥ 1280, чтобы Threads рисовал десктопную вёрстку (в мобильной поле ответа открывает модалку). */
-/** Компактное окно в углу: 660×600 при масштабе 50% = десктопная вёрстка (1320 CSS px), а на экране мало места. */
-const COMPACT = { width: 660, height: 600, zoom: 0.5 };
+/** Окно в углу: 900×600 при масштабе 50% = 1800 CSS px — десктопная вёрстка даже с открытой боковой панелью расширения. */
+const COMPACT = { width: 900, height: 600, zoom: 0.5 };
 
 /** Правый нижний угол экрана, на котором сейчас окно Леры. */
 async function cornerPosition(): Promise<{ left: number; top: number }> {
@@ -30,12 +30,31 @@ async function applyCompact(windowId: number, tabId: number): Promise<void> {
       const pos = await cornerPosition();
       await browser.windows.update(windowId, { state: 'normal', width: COMPACT.width, height: COMPACT.height, ...pos });
     }
-    const z = await browser.tabs.getZoom(tabId);
-    if (Math.abs(z - COMPACT.zoom) > 0.01) await browser.tabs.setZoom(tabId, COMPACT.zoom);
+    await setTabZoom(tabId);
   } catch {
     /* окно могло закрыться */
   }
 }
+
+/** Масштаб только этой вкладки: иначе Chrome уменьшает threads.com во всех вкладках профиля. */
+async function setTabZoom(tabId: number): Promise<void> {
+  try {
+    const zs = await browser.tabs.getZoomSettings(tabId);
+    if (zs.scope !== 'per-tab') await browser.tabs.setZoomSettings(tabId, { mode: 'automatic', scope: 'per-tab' });
+    const z = await browser.tabs.getZoom(tabId);
+    if (Math.abs(z - COMPACT.zoom) > 0.01) await browser.tabs.setZoom(tabId, COMPACT.zoom);
+  } catch {
+    /* вкладка закрыта */
+  }
+}
+
+// per-tab масштаб Chrome сбрасывает при каждом переходе — возвращаем 50% сразу на старте загрузки рабочей вкладки
+browser.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status !== 'loading') return;
+  void workTabItem.getValue().then((id) => {
+    if (id === tabId) void setTabZoom(tabId);
+  });
+});
 
 function isThreadsUrl(url?: string): boolean {
   return !!url && /^https:\/\/(www\.)?threads\.com\//.test(url);
@@ -160,7 +179,7 @@ async function resolveDedicatedWorkTab(create: boolean): Promise<number> {
   await workWindowItem.setValue(w.id);
   await workTabItem.setValue(tab.id);
   await lastWindowCreateItem.setValue(Date.now());
-  await browser.tabs.setZoom(tab.id, COMPACT.zoom).catch(() => undefined);
+  await setTabZoom(tab.id);
   return tab.id;
 }
 

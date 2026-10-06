@@ -12,7 +12,7 @@ export default defineConfig({
       'Собирает базу постов в Threads, предлагает комментарии и посты в голосе владельца, ведёт очередь одобрения.',
     options_ui: { open_in_tab: true },
     icons: { 16: 'icon-16.png', 32: 'icon-32.png', 48: 'icon-48.png', 128: 'icon-128.png' },
-    permissions: ['storage', 'alarms', 'sidePanel', 'tabs', 'downloads', 'notifications'],
+    permissions: ['storage', 'alarms', 'sidePanel', 'tabs', 'downloads', 'downloads.ui', 'notifications'],
     host_permissions: ['*://www.threads.com/*', '*://threads.com/*', 'https://openrouter.ai/*'],
     action: { default_title: 'Threads-агент LAK' },
   },

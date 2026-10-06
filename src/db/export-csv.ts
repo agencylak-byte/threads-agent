@@ -50,3 +50,16 @@ export async function downloadCsv(store: ExportStore, now = new Date()): Promise
   const url = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   await browser.downloads.download({ url, filename: `threads-agent/${store}-${stamp}.csv`, saveAs: false });
 }
+
+/** Тихая диагностика раз в час: один и тот же файл перезаписывается, панель загрузок не всплывает. */
+export async function downloadDiagCsv(store: ExportStore): Promise<void> {
+  const csv = await exportStoreCsv(store);
+  const url = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  const ui = (browser.downloads as unknown as { setUiOptions?: (o: { enabled: boolean }) => Promise<void> }).setUiOptions;
+  await ui?.({ enabled: false }).catch(() => undefined);
+  try {
+    await browser.downloads.download({ url, filename: `threads-agent/diag-${store}.csv`, saveAs: false, conflictAction: 'overwrite' });
+  } finally {
+    setTimeout(() => void ui?.({ enabled: true }).catch(() => undefined), 3000);
+  }
+}

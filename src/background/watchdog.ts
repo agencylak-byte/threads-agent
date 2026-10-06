@@ -12,6 +12,13 @@ import { broadcast } from './state';
 export async function runWatchdog(): Promise<void> {
   const now = Date.now();
   const [engine, settings, apiKey] = await Promise.all([engineStateItem.getValue(), getSettings(), apiKeyItem.getValue()]);
+  try {
+    // чтобы разбирать сбои по файлам, не дёргая Леру
+    const { downloadDiagCsv } = await import('@/db/export-csv');
+    for (const store of ['actions', 'events'] as const) await downloadDiagCsv(store);
+  } catch (e) {
+    log('error', 'diag export failed', String(e));
+  }
   if (!apiKey) return;
   const queued = (await listActionsByStatus(['queued'], 300)).filter((a) => (a.draftText || a.finalText) && (!a.scheduledFor || a.scheduledFor <= now));
   const last2h = await listExecutedBetween(now - 2 * 3600_000, now + 1);
