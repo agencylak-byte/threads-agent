@@ -103,10 +103,9 @@ export function startContent(): void {
         return;
       }
       case 'EXECUTE_ACTION': {
-        if (document.visibilityState === 'hidden' && !(await waitVisible(3000))) {
-          bridge.send({ type: 'ACTION_RESULT', actionId: m.action.id, ok: false, verified: false, error: 'окно Threads скрыто другими окнами — Chrome его усыпляет' });
-          return;
-        }
+        // Скрытое окно больше не отказ: ввод одним вызовом и свежая загрузка страницы обычно проходят и в фоне
+        // (06.10 из-за отказа за весь день не вышло ни одного поста). Отказ — только если в скрытом окне не получилось.
+        const wasHidden = document.visibilityState === 'hidden' && !(await waitVisible(3000));
         if (detectLoadError()) {
           const ok = await healLoadError();
           if (!ok) {
@@ -116,6 +115,7 @@ export function startContent(): void {
         }
         collector.stop();
         const r = await executeAction(m.action, m.selfHandle, m.likeBefore);
+        if (!r.ok && wasHidden && document.visibilityState === 'hidden') r.error = `окно Threads скрыто другими окнами — Chrome его усыпляет (${r.error ?? ''})`;
         bridge.send({ type: 'ACTION_RESULT', actionId: m.action.id, ...r });
         startPassive();
         return;
