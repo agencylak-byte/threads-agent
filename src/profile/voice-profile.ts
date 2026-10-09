@@ -194,7 +194,7 @@ export function toPromptBlock(p: VoiceProfile): string {
     list(p.habits),
     `Словарь: ${p.vocabulary.join(', ') || '—'}`,
     `Анти-словарь (никогда): ${p.antiVocabulary.join(', ') || '—'}`,
-    `Типичные зачины (не повторять подряд): ${p.openers.join(' | ') || '—'}`,
+    `Зачины-образцы (для понимания интонации; копировать нельзя, свой заход лучше): ${p.openers.join(' | ') || '—'}`,
     ``,
     `## Чего не делает`,
     list(p.forbiddenMoves),

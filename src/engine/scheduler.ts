@@ -219,37 +219,54 @@ export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): 
   const minSpacingMs = Math.min(windowMs / (s.autoPostsPerDay + 1), leftMs / Math.max(1, remaining));
   if (last && Date.now() - last < minSpacingMs) return;
 
-  // тема: первая по кругу, которой не было последние 14 дней
+  // формат — тот, что давнее всех не выходил (история — из context прошлых автопостов «Формат: id»)
+  const { pickFormat, startsWithBanned } = await import('@/profile/post-formats');
+  const recentAuto = (await listActionsByStatus(['done', 'queued', 'executing', 'proposed', 'failed'], 300)).filter((a) => a.type === 'publish-post');
+  const formatHistory = recentAuto
+    .map((a) => ({ format: /Формат: ([\w-]+)/.exec(a.context ?? '')?.[1] ?? '', at: a.executedAt ?? a.createdAt }))
+    .filter((h) => h.format);
+  const format = pickFormat(formatHistory, Date.now());
+
+  // тема (если формату нужна): первая по кругу, которой не было последние 14 дней
   const fresh = s.topicHistory.filter((h) => Date.now() - h.at < 14 * 86_400_000);
   const used = new Set(fresh.map((h) => h.topic));
   let topic: string | undefined;
-  for (let i = 0; i < s.postTopics.length; i++) {
-    const t = s.postTopics[(s.postTopicCursor + i) % s.postTopics.length]!;
-    if (!used.has(t)) {
-      topic = t;
-      break;
+  if (format.needsTopic) {
+    for (let i = 0; i < s.postTopics.length; i++) {
+      const t = s.postTopics[(s.postTopicCursor + i) % s.postTopics.length]!;
+      if (!used.has(t)) {
+        topic = t;
+        break;
+      }
     }
-  }
-  if (!topic) {
-    // все темы были за 14 дней (в т.ч. на несостоявшихся постах) — берём самую давнюю, а не молчим
-    const lastAt = new Map(fresh.map((h) => [h.topic, h.at]));
-    topic = [...s.postTopics].sort((a, b) => (lastAt.get(a) ?? 0) - (lastAt.get(b) ?? 0))[0];
-    if (!topic) return;
-    log('info', `autopost: все темы были за 14 дней — беру самую давнюю: ${topic}`);
+    if (!topic) {
+      // все темы были за 14 дней (в т.ч. на несостоявшихся постах) — берём самую давнюю, а не молчим
+      const lastAt = new Map(fresh.map((h) => [h.topic, h.at]));
+      topic = [...s.postTopics].sort((a, b) => (lastAt.get(a) ?? 0) - (lastAt.get(b) ?? 0))[0];
+      if (!topic) return;
+      log('info', `autopost: все темы были за 14 дней — беру самую давнюю: ${topic}`);
+    }
   }
   const { draftPost } = await import('@/llm/tasks/post-draft');
   const { listPostsByAuthor } = await import('@/db/repo-posts');
   const recent = (await listPostsByAuthor(self)).slice(0, 10).map((p) => p.text);
-  const { variants, usage } = await draftPost(topic, recent, undefined, 1);
+  let { variants, usage } = await draftPost(topic, recent, undefined, 1, format);
   await accountUsage(usage);
-  const v = variants[0];
+  let v = variants[0];
   if (!v) return;
+  const banned = startsWithBanned(v.text);
+  if (banned) {
+    // один повтор: затёртый зачин режет охват
+    ({ variants, usage } = await draftPost(topic, recent, `Не начинай с «${banned}». Начни сразу с сути.`, 1, format));
+    await accountUsage(usage);
+    v = variants[0] ?? v;
+  }
   const verdict = checkFacts(v.text, [businessFactsMd]);
   const needsReview = !verdict.ok;
   await createAction({
     type: 'publish-post',
     targetHandle: self,
-    context: `Автопост · тема: ${topic}\nКрючок: ${v.hook}\nПочему: ${v.why}`,
+    context: `Автопост · Формат: ${format.id} (${format.name}) · тема: ${topic ?? '—'}\nКрючок: ${v.hook}\nПочему: ${v.why}`,
     dedupeKey: makeDedupeKey('publish-post', { handle: self }),
     autonomyMode: needsReview ? 'suggest' : 'auto',
     draftText: v.text,
@@ -260,6 +277,8 @@ export async function autoPostStep(s: Awaited<ReturnType<typeof getSettings>>): 
     const just = (await la(['proposed'], 50)).find((x) => x.type === 'publish-post' && x.draftText === v.text);
     if (just) await ua(just.id, { needsReview: true, error: `защита от выдуманных цифр: ${verdict.fabricated.join(', ')} — нужно ручное одобрение` });
   }
+  log('info', `autopost: формат ${format.id}, тема ${topic ?? '—'}`);
+  if (!topic) return;
   const { patchSettings } = await import('@/shared/settings');
   const idx = s.postTopics.indexOf(topic);
   await patchSettings({

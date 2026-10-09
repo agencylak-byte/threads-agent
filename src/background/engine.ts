@@ -44,7 +44,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runMigrationTopicsV3()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -133,6 +133,19 @@ async function runMigrationAutopost(): Promise<void> {
   await autonomyItem.setValue({ ...cfg, 'publish-post': 'auto' });
   await flag.setValue(true);
   log('info', 'migration autopost_v2: 5 постов/день, publish-post → auto');
+}
+
+/** 09.10: провокационные темы — дописываем в сохранённый список (свои темы Леры не трогаем). */
+async function runMigrationTopicsV3(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_topics_v3', { fallback: false });
+  if (await flag.getValue()) return;
+  const { patchSettings, getSettings, NEW_TOPICS_V3 } = await import('@/shared/settings');
+  const cur = await getSettings();
+  const add = NEW_TOPICS_V3.filter((t) => !cur.postTopics.includes(t));
+  if (add.length) await patchSettings({ postTopics: [...cur.postTopics, ...add] });
+  await flag.setValue(true);
+  log('info', `migration topics_v3: +${add.length} тем`);
 }
 
 /** 06.10: лимиты считались вместе с отправками старого аккаунта — очередь отложили «до завтра». Снимаем отсрочку. */
