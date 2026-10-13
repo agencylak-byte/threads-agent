@@ -31,6 +31,7 @@ export async function draftReply(
   last: ThreadLine,
   usedOpeners: string[],
   hint?: string,
+  extra: { parentText?: string; formatGuidance?: string; authorInfo?: string } = {},
 ): Promise<ReplyDraft> {
   const ctx = await llmContext();
   const maxChars = DRAFT_MAX_CHARS[type];
@@ -49,6 +50,9 @@ export async function draftReply(
       maxChars,
       address: ctx.profile.address,
       usedOpeners: fmtOpeners(usedOpeners),
+      parentText: extra.parentText ?? '— (не определили; ориентируйся на ветку)',
+      formatGuidance: extra.formatGuidance ?? 'Держи ту же позицию, что в нашем посте.',
+      authorInfo: extra.authorInfo ?? '—',
       hint: fmtHint(hint),
     },
     maxTokens: 400,

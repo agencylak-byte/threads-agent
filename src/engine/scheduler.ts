@@ -159,22 +159,48 @@ export async function draftFor(a: Action, hint?: string): Promise<string> {
   } else if (a.type === 'reply-own-post' || a.type === 'reply-thread') {
     const reply = a.targetPostId ? await getPost(a.targetPostId) : undefined;
     if (!reply) throw new Error('реплика не найдена в базе');
+    const { collectOurTexts, splitReply, describeAuthor, formatGuidance, metaLeak } = await import('./reply-context');
+    const { listPostsByAuthor } = await import('@/db/repo-posts');
+    const { getAuthor } = await import('@/db/repo-authors');
+    const sent = await listActionsByStatus(['done', 'executing', 'queued'], 400);
+    const ours = collectOurTexts(selfHandle ? await listPostsByAuthor(selfHandle) : [], sent.filter((x) => x.id !== a.id));
+    const split = splitReply(reply.text, ours);
+    if (!split) {
+      // в карточке только наш собственный текст — отвечать не на что (раньше бот писал «вы скопировали мой пост»)
+      await updateAction(a.id, { status: 'rejected', error: 'реплика собеседника не прочиталась — в карточке только наш текст' });
+      log('info', `reply ${a.id}: нет реплики собеседника, пропуск`);
+      return '';
+    }
     const root = reply.isReplyTo ? await getPost(reply.isReplyTo) : undefined;
+    const parentText = split.parent?.text ?? (root && root.authorHandle === selfHandle ? root.text : undefined);
+    const rootFormat = split.parent?.format ?? (root ? ours.find((o) => o.text.slice(0, 40) === root.text.slice(0, 40))?.format : undefined);
     const thread = [
-      ...(root ? [{ handle: root.authorHandle, text: root.text, isSelf: root.authorHandle === selfHandle }] : []),
-      { handle: reply.authorHandle, text: reply.text, isSelf: false },
+      ...(root && root.text !== parentText ? [{ handle: root.authorHandle, text: root.text, isSelf: root.authorHandle === selfHandle }] : []),
+      ...(parentText ? [{ handle: selfHandle ?? 'мы', text: parentText, isSelf: true }] : []),
+      { handle: reply.authorHandle, text: split.message, isSelf: false },
     ];
-    let r = await draftReply(a.type, thread, { handle: reply.authorHandle, text: reply.text, isSelf: false }, openers, hint);
+    const last = { handle: reply.authorHandle, text: split.message, isSelf: false };
+    const theirPosts = (await listPostsByAuthor(reply.authorHandle)).filter((p) => p.id !== reply.id && p.source !== 'activity');
+    const extra = {
+      parentText,
+      formatGuidance: formatGuidance(rootFormat),
+      authorInfo: describeAuthor(reply.authorHandle, await getAuthor(reply.authorHandle), theirPosts),
+    };
+    let r = await draftReply(a.type, thread, last, openers, hint, extra);
     const sources = [...thread.map((l) => l.text), businessFactsMd];
     let verdict = checkFacts(r.text, sources);
-    if (!verdict.ok) {
-      r = await draftReply(a.type, thread, { handle: reply.authorHandle, text: reply.text, isSelf: false }, openers, (hint ? hint + '. ' : '') + FACT_GUARD_HINT);
+    let leak = metaLeak(r.text);
+    if (!verdict.ok || leak) {
+      const why = [hint, !verdict.ok ? FACT_GUARD_HINT : '', leak ? `Без слов «${leak}»: ты живой человек, отвечай по сути реплики` : ''].filter(Boolean).join('. ');
+      r = await draftReply(a.type, thread, last, openers, why, extra);
       verdict = checkFacts(r.text, sources);
+      leak = metaLeak(r.text);
     }
     text = r.text;
     usage = r.usage;
-    if (!verdict.ok) {
-      await updateAction(a.id, { draftText: text, llm: usage, status: 'proposed', needsReview: true, error: `защита от выдуманных цифр: ${verdict.fabricated.join(', ')} — нужно ручное одобрение` });
+    if (!verdict.ok || leak) {
+      const error = leak ? `ответ звучит как бот («${leak}») — нужно ручное одобрение` : `защита от выдуманных цифр: ${verdict.fabricated.join(', ')} — нужно ручное одобрение`;
+      await updateAction(a.id, { draftText: text, llm: usage, status: 'proposed', needsReview: true, error });
       return text;
     }
   } else {

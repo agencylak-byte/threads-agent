@@ -44,7 +44,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runMigrationTopicsV3()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runMigrationTopicsV3()).then(() => runMigrationRepliesV2()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -133,6 +133,18 @@ async function runMigrationAutopost(): Promise<void> {
   await autonomyItem.setValue({ ...cfg, 'publish-post': 'auto' });
   await flag.setValue(true);
   log('info', 'migration autopost_v2: 5 постов/день, publish-post → auto');
+}
+
+/** 13.10: ответы в очереди писались по склеенному тексту (наш пост под именем собеседника) — переписать заново. */
+async function runMigrationRepliesV2(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_replies_v2', { fallback: false });
+  if (await flag.getValue()) return;
+  const { listActionsByStatus, updateAction } = await import('@/db/repo-actions');
+  const pending = (await listActionsByStatus(['proposed', 'queued'], 500)).filter((a) => a.type === 'reply-own-post' || a.type === 'reply-thread');
+  for (const a of pending) await updateAction(a.id, { draftText: undefined, finalText: undefined, needsReview: undefined, error: undefined });
+  await flag.setValue(true);
+  log('info', `migration replies_v2: ${pending.length} ответов будут переписаны`);
 }
 
 /** 09.10: провокационные темы — дописываем в сохранённый список (свои темы Леры не трогаем). */

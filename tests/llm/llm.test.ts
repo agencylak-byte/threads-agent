@@ -26,7 +26,7 @@ describe('renderPrompt', () => {
     const all: Array<[string, string, Record<string, string | number>]> = [
       ['classify', classifyMd, { businessFacts: 'f', posts: 'p' }],
       ['comment', commentMd, { voice: 'v', playbook: 'p', authorHandle: 'a', authorName: '', authorBio: 'b', authorFollowers: 10, niche: 'n', postText: 't', maxChars: 280, address: 'вы', usedOpeners: '—', hint: '' }],
-      ['reply', replyMd, { voice: 'v', playbook: 'p', replyKind: 'k', thread: 't', authorHandle: 'a', lastMessage: 'm', maxChars: 320, address: 'вы', usedOpeners: '—', hint: '' }],
+      ['reply', replyMd, { voice: 'v', playbook: 'p', replyKind: 'k', thread: 't', authorHandle: 'a', lastMessage: 'm', maxChars: 320, address: 'вы', usedOpeners: '—', parentText: 'p', formatGuidance: 'g', authorInfo: 'i', hint: '' }],
       ['post', postMd, { voice: 'v', businessFacts: 'f', playbook: 'p', topic: 't', recentPosts: '—', maxChars: 500, variantsCount: 1, formatName: 'n', formatInstruction: 'i', bannedOpeners: 'b', hint: '' }],
       ['voice', voiceMd, { samplesCount: 5, identity: 'i', samples: 's' }],
     ];
