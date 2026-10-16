@@ -14,7 +14,7 @@ export async function typeInto(editor: HTMLElement, text: string): Promise<void>
   // Каждый следующий способ — только если поле осталось ПУСТЫМ: Lexical рисует текст с задержкой,
   // и раньше fallback'и вставляли текст поверх уже вставленного (06.10 — тройной текст, −119 символов).
   const attempts: Array<() => void> = [
-    () => document.execCommand('insertText', false, text),
+    () => insertLines(text),
     () => pasteInto(editor, text),
     () => editor.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: text, bubbles: true, cancelable: true })),
   ];
@@ -44,6 +44,19 @@ export async function typeInto(editor: HTMLElement, text: string): Promise<void>
 }
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+/** Сравнение без пробелов и переводов строк: Lexical может склеить абзацы («комментах.Я Лера»), текст при этом наш. */
+const bare = (s: string) => s.replace(/\s+/g, '');
+
+/** Ввод по строкам с абзацами между ними: insertText с «\n» Lexical склеивал в один абзац без пробела. */
+function insertLines(text: string): boolean {
+  const lines = text.split('\n');
+  let ok = true;
+  lines.forEach((line, i) => {
+    if (i > 0) ok = document.execCommand('insertParagraph', false) && ok;
+    if (line) ok = document.execCommand('insertText', false, line) && ok;
+  });
+  return ok;
+}
 
 function editorText(editor: HTMLElement): string {
   return norm(editor.innerText || editor.textContent || '');
@@ -51,8 +64,8 @@ function editorText(editor: HTMLElement): string {
 
 /** В поле ровно наш текст (с точностью до пробелов), без повторов. */
 export function editorMatches(editor: HTMLElement, text: string): boolean {
-  const have = editorText(editor);
-  const want = norm(text);
+  const have = bare(editorText(editor));
+  const want = bare(text);
   return have === want || (Math.abs(have.length - want.length) <= 3 && have.startsWith(want.slice(0, 40)));
 }
 
@@ -94,8 +107,8 @@ function clearEditor(el: HTMLElement): void {
 }
 
 export function editorContains(editor: HTMLElement, text: string): boolean {
-  const have = norm(editor.innerText || editor.textContent || '');
-  const want = norm(text);
+  const have = bare(editor.innerText || editor.textContent || '');
+  const want = bare(text);
   return have.includes(want.slice(0, Math.min(want.length, 60)));
 }
 
