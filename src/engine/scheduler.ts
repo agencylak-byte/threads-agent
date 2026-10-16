@@ -2,7 +2,7 @@ import { listUnclassified, markClassified, getPost } from '@/db/repo-posts';
 import { upsertAuthor } from '@/db/repo-authors';
 import { expireProposals, listActionsByStatus, recentSentOpeners, updateAction } from '@/db/repo-actions';
 import { bumpMetric, dateKey } from '@/db/repo-metrics';
-import { apiKeyItem, autonomyItem, engineStateItem, getSettings, llmCreditsOutItem, selfHandleItem } from '@/shared/settings';
+import { apiKeyItem, autonomyItem, engineStateItem, getSettings, lastActivityAtItem, lastCollectAtItem, llmCreditsOutItem, selfHandleItem } from '@/shared/settings';
 import { PROPOSAL_TTL_MS } from '@/shared/constants';
 import { log } from '@/shared/log';
 import { classifyPosts } from '@/llm/tasks/classify-lpr';
@@ -21,9 +21,7 @@ import type { Action, LlmUsage } from '@/shared/types';
 let ticking = false;
 let dispatchHook: (() => Promise<void>) | null = null;
 let activityHook: (() => Promise<void>) | null = null;
-let lastActivityAt = 0;
 let collectHook: (() => Promise<void>) | null = null;
-let lastCollectAt = 0;
 let reverifyHook: (() => Promise<void>) | null = null;
 export function setReverifyHook(h: (() => Promise<void>) | null): void {
   reverifyHook = h;
@@ -57,12 +55,16 @@ export async function tick(): Promise<void> {
     const s = await getSettings();
     // Каждый шаг отдельно: раньше ошибка одного шага (нет денег на OpenRouter, таймаут сбора) обрывала весь тик,
     // и 13–16.10 готовые 66 черновиков не отправлялись, хотя отправке модель не нужна.
-    if (activityHook && s.autoReplyIntervalMin > 0 && Date.now() - lastActivityAt > s.autoReplyIntervalMin * 60_000) {
-      lastActivityAt = Date.now();
+    // Сначала отправка готового: сбор занимает вкладку на минуты, и раньше отправка за ним не успевала.
+    if (dispatchHook) await step('отправка', dispatchHook);
+    // Время сборов — в storage: в памяти оно обнулялось при каждом засыпании service worker,
+    // и 14–16.10 сбор по ключам шёл почти каждую минуту, занимая вкладку вместо отправки.
+    if (activityHook && s.autoReplyIntervalMin > 0 && Date.now() - (await lastActivityAtItem.getValue()) > s.autoReplyIntervalMin * 60_000) {
+      await lastActivityAtItem.setValue(Date.now());
       await step('сбор ответов', activityHook);
     }
-    if (collectHook && s.autoCollectIntervalMin > 0 && Date.now() - lastCollectAt > s.autoCollectIntervalMin * 60_000 && engine.status === 'running') {
-      lastCollectAt = Date.now();
+    if (collectHook && s.autoCollectIntervalMin > 0 && Date.now() - (await lastCollectAtItem.getValue()) > s.autoCollectIntervalMin * 60_000 && engine.status === 'running') {
+      await lastCollectAtItem.setValue(Date.now());
       await step('сбор по ключам', collectHook);
     }
     const creditsOutAt = await llmCreditsOutItem.getValue();
@@ -76,7 +78,6 @@ export async function tick(): Promise<void> {
     } else {
       await step('планирование', planStep);
     }
-    if (dispatchHook) await step('отправка', dispatchHook);
     if (reverifyHook) await step('перепроверка', reverifyHook);
     await engineStateItem.setValue({ ...(await engineStateItem.getValue()), lastTickAt: Date.now() });
   } catch (e) {

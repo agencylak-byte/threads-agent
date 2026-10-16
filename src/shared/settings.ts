@@ -135,6 +135,9 @@ export const lastWindowCreateItem = storage.defineItem<number>('local:lastWindow
 /** Когда последний раз рабочее окно оказалось скрытым (0 — видно). */
 /** Когда OpenRouter последний раз ответил «нет денег» (402). 0 — всё в порядке. */
 export const llmCreditsOutItem = storage.defineItem<number>('local:llmCreditsOutAt', { fallback: 0 });
+/** Время последних автосборов — в storage: service worker засыпает, и счётчик в памяти обнулялся (сбор шёл каждую минуту). */
+export const lastCollectAtItem = storage.defineItem<number>('local:lastCollectAt', { fallback: 0 });
+export const lastActivityAtItem = storage.defineItem<number>('local:lastActivityAt', { fallback: 0 });
 export const windowHiddenItem = storage.defineItem<number>('local:windowHiddenAt', { fallback: 0 });
 
 export async function getSettings(): Promise<Settings> {
