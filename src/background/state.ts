@@ -7,7 +7,7 @@ import { countAuthors } from '@/db/repo-authors';
 import { countActionsByStatus } from '@/db/repo-actions';
 import { countEvents } from '@/db/repo-events';
 import { dateKey, getMetrics } from '@/db/repo-metrics';
-import { apiKeyItem, engineStateItem, getSettings, selfHandleItem, voiceProfileItem, windowHiddenItem } from '@/shared/settings';
+import { apiKeyItem, engineStateItem, getSettings, llmCreditsOutItem, selfHandleItem, voiceProfileItem, windowHiddenItem } from '@/shared/settings';
 import type { JobRequest, StateSnapshot, SwToUi } from '@/shared/messages';
 import type { EngineState } from '@/shared/types';
 import type { Settings } from '@/shared/settings';
@@ -109,7 +109,10 @@ async function describeDispatch(engine: EngineState, settings: Settings, hasKey:
   if (!hasKey) return 'Не задан ключ OpenRouter.';
   if (engine.status === 'stopped') return 'Движок остановлен — «Здоровье» → «Запустить».';
   if (engine.status === 'paused') return `Пауза после аномалии до ${engine.pausedUntil ? fmtTime(engine.pausedUntil, settings.timezone) : '—'}: ${engine.pauseReason ?? ''}`;
-  if (!queued.length) return 'Одобренных к отправке нет.';
+  const creditsOut = await llmCreditsOutItem.getValue();
+  const money = creditsOut ? 'На OpenRouter закончились деньги — новые тексты и посты не пишутся. Пополните баланс: openrouter.ai → Credits. ' : '';
+  if (!queued.length) return money + 'Одобренных к отправке нет.';
+  if (money) return money + `Готовые (${queued.length}) отправляю дальше.`;
   if (isJobRunning()) return `Идёт сбор (${currentJob?.kind ?? ''}) — отправка продолжится после него.`;
   const hiddenAt = await windowHiddenItem.getValue();
   if (hiddenAt && now - hiddenAt < 30 * 60_000)

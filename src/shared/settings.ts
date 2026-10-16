@@ -133,6 +133,8 @@ export const workTabItem = storage.defineItem<number | null>('session:workTabId'
 export const workWindowItem = storage.defineItem<number | null>('local:workWindowId', { fallback: null });
 export const lastWindowCreateItem = storage.defineItem<number>('local:lastWindowCreateAt', { fallback: 0 });
 /** Когда последний раз рабочее окно оказалось скрытым (0 — видно). */
+/** Когда OpenRouter последний раз ответил «нет денег» (402). 0 — всё в порядке. */
+export const llmCreditsOutItem = storage.defineItem<number>('local:llmCreditsOutAt', { fallback: 0 });
 export const windowHiddenItem = storage.defineItem<number>('local:windowHiddenAt', { fallback: 0 });
 
 export async function getSettings(): Promise<Settings> {

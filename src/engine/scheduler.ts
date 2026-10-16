@@ -2,7 +2,7 @@ import { listUnclassified, markClassified, getPost } from '@/db/repo-posts';
 import { upsertAuthor } from '@/db/repo-authors';
 import { expireProposals, listActionsByStatus, recentSentOpeners, updateAction } from '@/db/repo-actions';
 import { bumpMetric, dateKey } from '@/db/repo-metrics';
-import { apiKeyItem, autonomyItem, engineStateItem, getSettings, selfHandleItem } from '@/shared/settings';
+import { apiKeyItem, autonomyItem, engineStateItem, getSettings, llmCreditsOutItem, selfHandleItem } from '@/shared/settings';
 import { PROPOSAL_TTL_MS } from '@/shared/constants';
 import { log } from '@/shared/log';
 import { classifyPosts } from '@/llm/tasks/classify-lpr';
@@ -55,20 +55,29 @@ export async function tick(): Promise<void> {
     const apiKey = await apiKeyItem.getValue();
     if (!apiKey) return;
     const s = await getSettings();
+    // Каждый шаг отдельно: раньше ошибка одного шага (нет денег на OpenRouter, таймаут сбора) обрывала весь тик,
+    // и 13–16.10 готовые 66 черновиков не отправлялись, хотя отправке модель не нужна.
     if (activityHook && s.autoReplyIntervalMin > 0 && Date.now() - lastActivityAt > s.autoReplyIntervalMin * 60_000) {
       lastActivityAt = Date.now();
-      await activityHook();
+      await step('сбор ответов', activityHook);
     }
     if (collectHook && s.autoCollectIntervalMin > 0 && Date.now() - lastCollectAt > s.autoCollectIntervalMin * 60_000 && engine.status === 'running') {
       lastCollectAt = Date.now();
-      await collectHook();
+      await step('сбор по ключам', collectHook);
     }
-    await classifyStep();
-    await planStep();
-    await draftStep();
-    await autoPostStep(s);
-    if (dispatchHook) await dispatchHook();
-    if (reverifyHook) await reverifyHook();
+    const creditsOutAt = await llmCreditsOutItem.getValue();
+    // без денег на модели не долбим OpenRouter каждую минуту: пробуем раз в 30 минут
+    const llmAllowed = !creditsOutAt || Date.now() - creditsOutAt > 30 * 60_000;
+    if (llmAllowed) {
+      await step('оценка постов', classifyStep);
+      await step('планирование', planStep);
+      await step('черновики', draftStep);
+      await step('автопост', () => autoPostStep(s));
+    } else {
+      await step('планирование', planStep);
+    }
+    if (dispatchHook) await step('отправка', dispatchHook);
+    if (reverifyHook) await step('перепроверка', reverifyHook);
     await engineStateItem.setValue({ ...(await engineStateItem.getValue()), lastTickAt: Date.now() });
   } catch (e) {
     log('error', 'tick failed', String(e));
@@ -77,7 +86,26 @@ export async function tick(): Promise<void> {
   }
 }
 
+async function step(name: string, fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn();
+  } catch (e) {
+    const msg = String(e);
+    if (/OpenRouter HTTP 402|more credits/i.test(msg)) {
+      const prev = await llmCreditsOutItem.getValue();
+      await llmCreditsOutItem.setValue(Date.now());
+      if (!prev) log('anomaly', 'На OpenRouter закончились деньги — тексты не пишутся, пока не пополните баланс. Отправка готовых продолжается.');
+      return;
+    }
+    log('error', `шаг «${name}» не выполнен`, msg);
+  }
+}
+
 async function accountUsage(usage: LlmUsage): Promise<void> {
+  if (await llmCreditsOutItem.getValue()) {
+    await llmCreditsOutItem.setValue(0);
+    log('info', 'OpenRouter снова отвечает — тексты пишутся');
+  }
   const s = await getSettings();
   await bumpMetric(dateKey(Date.now(), s.timezone), 'llmCostUsd', usage.costUsd);
 }
