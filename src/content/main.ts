@@ -98,8 +98,13 @@ export function startContent(): void {
         return;
       }
       case 'UPDATE_BIO': {
-        const { updateBio } = await import('./actions/profile-edit');
-        const r = await updateBio(m.text);
+        const pe = await import('./actions/profile-edit');
+        const { dumpPage } = await import('./page-dump');
+        // страховка: если что-то зависло, всё равно ответить и приложить снимок
+        const timeout = new Promise<{ ok: false; error: string; debugHtml: string }>((res) =>
+          setTimeout(() => res({ ok: false, error: `зависло на шаге «${pe.bioStep}»`, debugHtml: dumpPage() }), 60_000),
+        );
+        const r = await Promise.race([pe.updateBio(m.text), timeout]);
         bridge.send({ type: 'BIO_RESULT', ...r });
         return;
       }

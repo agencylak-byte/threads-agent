@@ -138,7 +138,7 @@ async function runMigrationAutopost(): Promise<void> {
 /** 20.10: шапка профиля — Лера попросила поставить её за неё. */
 async function runMigrationBioV1(): Promise<void> {
   const { storage } = await import('wxt/utils/storage');
-  const flag = storage.defineItem<boolean>('local:migration_bio_v1', { fallback: false });
+  const flag = storage.defineItem<boolean>('local:migration_bio_v2', { fallback: false });
   if (await flag.getValue()) return;
   const { pendingBioItem, bioAttemptsItem } = await import('@/shared/settings');
   await pendingBioItem.setValue('Основательница SMM-агентства LAK · Делаем так, чтобы соцсети приносили заявки, а не просто охват · Бесплатный разбор профиля → TG @gashenko1');

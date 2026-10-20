@@ -42,14 +42,19 @@ function setTextarea(ta: HTMLTextAreaElement, text: string): void {
   ta.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+/** Последний пройденный шаг — чтобы при зависании было видно, где. */
+export let bioStep = 'старт';
+
 export async function updateBio(text: string): Promise<BioResult> {
   const fail = (error: string): BioResult => ({ ok: false, error, debugHtml: `<!-- result: ${error} -->\n${dumpPage()}` });
   try {
     const edit = await waitFor(() => clickable(/^(редактировать профиль|edit profile)$/i), { timeoutMs: 10_000 }).catch(() => null);
     if (!edit) return fail('кнопка «Редактировать профиль» не найдена');
+    bioStep = 'клик «Редактировать профиль»';
     edit.click();
     const dlg = await waitFor(() => topDialog(), { timeoutMs: 8000 }).catch(() => null);
     if (!dlg) return fail('окно редактирования профиля не открылось');
+    bioStep = 'окно профиля открыто';
     await sleep(800);
 
     // поле «Био»: либо сразу поле ввода, либо строка, по клику на которую открывается отдельное окно
@@ -59,7 +64,7 @@ export async function updateBio(text: string): Promise<BioResult> {
     if (!field) {
       const row = Array.from(dlg.querySelectorAll<HTMLElement>('div[role="button"], label, div'))
         .filter(visible)
-        .find((e) => /^(биография|био|bio)\b/i.test(clean(e.textContent)) && clean(e.textContent).length < 200);
+        .find((e) => /^(биография|био|bio)(?![\p{L}])/iu.test(clean(e.textContent)) && clean(e.textContent).length < 200);
       if (!row) return fail('строка «Биография» в окне профиля не найдена');
       row.click();
       await sleep(1000);
@@ -67,10 +72,12 @@ export async function updateBio(text: string): Promise<BioResult> {
     }
     if (!field) return fail('поле для текста «Биографии» не появилось');
 
+    bioStep = 'ввод текста';
     if (field instanceof HTMLTextAreaElement) setTextarea(field, text);
     else await typeInto(field, text);
     await sleep(800);
 
+    bioStep = 'сохранение';
     // «Готово» во вложенном окне, затем «Готово»/«Сохранить» в окне профиля
     for (let i = 0; i < 2; i++) {
       const top = topDialog();
