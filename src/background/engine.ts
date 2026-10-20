@@ -44,7 +44,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runMigrationTopicsV3()).then(() => runMigrationRepliesV2()).then(() => runMigrationVacanciesV1()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runMigrationTopicsV3()).then(() => runMigrationRepliesV2()).then(() => runMigrationVacanciesV1()).then(() => runMigrationBioV1()).then(() => import('./profile-bio').then((b) => b.applyPendingBio())).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -133,6 +133,17 @@ async function runMigrationAutopost(): Promise<void> {
   await autonomyItem.setValue({ ...cfg, 'publish-post': 'auto' });
   await flag.setValue(true);
   log('info', 'migration autopost_v2: 5 постов/день, publish-post → auto');
+}
+
+/** 20.10: шапка профиля — Лера попросила поставить её за неё. */
+async function runMigrationBioV1(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_bio_v1', { fallback: false });
+  if (await flag.getValue()) return;
+  const { pendingBioItem, bioAttemptsItem } = await import('@/shared/settings');
+  await pendingBioItem.setValue('Основательница SMM-агентства LAK · Делаем так, чтобы соцсети приносили заявки, а не просто охват · Бесплатный разбор профиля → TG @gashenko1');
+  await bioAttemptsItem.setValue(0);
+  await flag.setValue(true);
 }
 
 /** 20.10: отклики на вакансии — свежие посты «ищу SMM/рилс/таргет…» переоценить новым промтом (он ставит vacancy). */

@@ -138,6 +138,9 @@ export const llmCreditsOutItem = storage.defineItem<number>('local:llmCreditsOut
 /** Время последних автосборов — в storage: service worker засыпает, и счётчик в памяти обнулялся (сбор шёл каждую минуту). */
 export const lastCollectAtItem = storage.defineItem<number>('local:lastCollectAt', { fallback: 0 });
 export const lastActivityAtItem = storage.defineItem<number>('local:lastActivityAt', { fallback: 0 });
+/** Текст «Био», который бот должен поставить в профиль (пусто — нечего менять), и число попыток. */
+export const pendingBioItem = storage.defineItem<string>('local:pendingBio', { fallback: '' });
+export const bioAttemptsItem = storage.defineItem<number>('local:bioAttempts', { fallback: 0 });
 export const windowHiddenItem = storage.defineItem<number>('local:windowHiddenAt', { fallback: 0 });
 
 export async function getSettings(): Promise<Settings> {

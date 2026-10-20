@@ -41,7 +41,8 @@ export type ContentToSw =
   | { type: 'SELFTEST_RESULT'; page: string; broken: string[] }
   | { type: 'PAGE_DUMP'; page: string; html: string }
   | { type: 'HEARTBEAT' }
-  | { type: 'VERIFY_RESULT'; actionId: string; found: boolean };
+  | { type: 'VERIFY_RESULT'; actionId: string; found: boolean }
+  | { type: 'BIO_RESULT'; ok: boolean; error?: string; debugHtml?: string };
 
 export type SwToContent =
   | { type: 'NAVIGATE'; url: string }
@@ -49,7 +50,8 @@ export type SwToContent =
   | { type: 'EXECUTE_ACTION'; action: Action; selfHandle: string; likeBefore: boolean }
   | { type: 'RUN_SELFTEST' }
   | { type: 'DUMP_PAGE' }
-  | { type: 'VERIFY_REPLY'; actionId: string; selfHandle: string; text: string };
+  | { type: 'VERIFY_REPLY'; actionId: string; selfHandle: string; text: string }
+  | { type: 'UPDATE_BIO'; text: string };
 
 export type JobKind =
   | 'collect-keyword'

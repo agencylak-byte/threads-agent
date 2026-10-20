@@ -97,6 +97,12 @@ export function startContent(): void {
         bridge.send({ type: 'SELFTEST_RESULT', page: st.page, broken: st.broken });
         return;
       }
+      case 'UPDATE_BIO': {
+        const { updateBio } = await import('./actions/profile-edit');
+        const r = await updateBio(m.text);
+        bridge.send({ type: 'BIO_RESULT', ...r });
+        return;
+      }
       case 'DUMP_PAGE': {
         const { dumpPage } = await import('./page-dump');
         bridge.send({ type: 'PAGE_DUMP', page: pageKind(location.href), html: dumpPage() });
