@@ -44,7 +44,7 @@ export function initEngine(): void {
     void import('@/db/repo-actions').then(async (r) => {
       for (const a of await r.listActionsByStatus(['queued'])) await r.updateAction(a.id, { scheduledFor: undefined });
     });
-    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runMigrationTopicsV3()).then(() => runMigrationRepliesV2()).then(() => runTick());
+    void runMigrations().then(() => runMigrationRepropose()).then(() => runMigrationTimezone()).then(() => runMigrationAutoReply()).then(() => runMigrationPace()).then(() => runMigrationAutopilotComments()).then(() => runMigrationAutopost()).then(() => runMigrationAccountLimits()).then(() => runMigrationTopicsV3()).then(() => runMigrationRepliesV2()).then(() => runMigrationVacanciesV1()).then(() => runTick());
   });
   browser.runtime.onStartup.addListener(() => void ensureAlarms());
   void ensureAlarms();
@@ -133,6 +133,22 @@ async function runMigrationAutopost(): Promise<void> {
   await autonomyItem.setValue({ ...cfg, 'publish-post': 'auto' });
   await flag.setValue(true);
   log('info', 'migration autopost_v2: 5 постов/день, publish-post → auto');
+}
+
+/** 20.10: отклики на вакансии — свежие посты «ищу SMM/рилс/таргет…» переоценить новым промтом (он ставит vacancy). */
+async function runMigrationVacanciesV1(): Promise<void> {
+  const { storage } = await import('wxt/utils/storage');
+  const flag = storage.defineItem<boolean>('local:migration_vacancies_v1', { fallback: false });
+  if (await flag.getValue()) return;
+  const { resetClassificationFor } = await import('@/db/repo-posts');
+  const hire = /(ищу|ищем|нужен|нужна|нужны|требуе|вакансия)/i;
+  const role = /(smm|смм|контент|рилс|reels|таргет|маркетолог|копирайт|монтаж|сторис|дизайн|продвижени|ведени)/i;
+  const since = Date.now() - 5 * 86_400_000;
+  const n = await resetClassificationFor(
+    (p) => (p.postedAt ?? p.firstSeenAt) > since && p.actionStatus !== 'commented' && p.actionStatus !== 'proposed' && hire.test(p.text.slice(0, 300)) && role.test(p.text.slice(0, 300)),
+  );
+  await flag.setValue(true);
+  log('info', `migration vacancies_v1: ${n} постов-вакансий на переоценку`);
 }
 
 /** 13.10: ответы в очереди писались по склеенному тексту (наш пост под именем собеседника) — переписать заново. */

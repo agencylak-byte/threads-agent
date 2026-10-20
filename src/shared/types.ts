@@ -11,6 +11,8 @@ export interface PostAi {
   topic?: string;
   niche: string;
   isFreelancer: boolean;
+  /** Пост — вакансия под услуги LAK (ищут SMM/контент/рилс/таргет и т.п.): откликаемся. */
+  vacancy?: { role: string; fit: number };
   reason: string;
   model: string;
   at: number;

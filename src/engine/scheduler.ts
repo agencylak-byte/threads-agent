@@ -11,7 +11,7 @@ import { draftReply } from '@/llm/tasks/reply-draft';
 import { openerDuplicate } from './dedupe';
 import { FACT_GUARD_HINT, checkFacts } from './fact-guard';
 import businessFactsMd from '@/profile/seed/business-facts.md?raw';
-import { planComments, planReplies } from './planner';
+import { VACANCY_MARK, planComments, planReplies, planVacancies } from './planner';
 import { canPrepare } from './autonomy';
 import type { Action, LlmUsage } from '@/shared/types';
 
@@ -133,7 +133,9 @@ export async function classifyStep(): Promise<number> {
 export async function planStep(): Promise<void> {
   const [settings, autonomy, selfHandle] = await Promise.all([getSettings(), autonomyItem.getValue(), selfHandleItem.getValue()]);
   if (!selfHandle) return;
-  const backlog = (await listActionsByStatus(['proposed', 'queued'], 1000)).filter((a) => a.type === 'comment-on-stranger').length;
+  // вакансии — всегда, даже при полной очереди обычных комментариев
+  await planVacancies({ settings, autonomy, selfHandle });
+  const backlog = (await listActionsByStatus(['proposed', 'queued'], 1000)).filter((a) => a.type === 'comment-on-stranger' && !a.context?.startsWith(VACANCY_MARK)).length;
   if (backlog < settings.limits['comment-on-stranger'] * 3) await planComments({ settings, autonomy, selfHandle });
   await planReplies({ settings, autonomy, selfHandle });
 }
@@ -163,13 +165,15 @@ export async function draftFor(a: Action, hint?: string): Promise<string> {
   if (a.type === 'comment-on-stranger') {
     const post = a.targetPostId ? await getPost(a.targetPostId) : undefined;
     if (!post) throw new Error('пост не найден в базе');
-    let r = await draftComment(post, openers, hint);
-    if (openerDuplicate(r.text, openers)) r = await draftComment(post, openers, (hint ? hint + '. ' : '') + 'Начни совсем иначе, чем перечисленные зачины');
+    const isVacancy = a.context?.startsWith(VACANCY_MARK) ?? false;
+    const draft = isVacancy ? (await import('@/llm/tasks/vacancy-reply')).draftVacancyReply : draftComment;
+    let r = await draft(post, openers, hint);
+    if (openerDuplicate(r.text, openers)) r = await draft(post, openers, (hint ? hint + '. ' : '') + 'Начни совсем иначе, чем перечисленные зачины');
     const sources = [post.text, businessFactsMd];
     let verdict = checkFacts(r.text, sources);
     if (!verdict.ok) {
       log('info', `fact-guard: выдуманные цифры ${verdict.fabricated.join(', ')} → перегенерация`);
-      r = await draftComment(post, openers, (hint ? hint + '. ' : '') + FACT_GUARD_HINT);
+      r = await draft(post, openers, (hint ? hint + '. ' : '') + FACT_GUARD_HINT);
       verdict = checkFacts(r.text, sources);
     }
     text = r.text;

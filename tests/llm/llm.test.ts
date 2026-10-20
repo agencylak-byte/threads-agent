@@ -9,6 +9,7 @@ import commentMd from '@/prompts/comment-draft.md?raw';
 import replyMd from '@/prompts/reply-draft.md?raw';
 import postMd from '@/prompts/post-draft.md?raw';
 import voiceMd from '@/prompts/voice-extract.md?raw';
+import vacancyMd from '@/prompts/vacancy-reply.md?raw';
 
 describe('renderPrompt', () => {
   it('делит на SYSTEM/USER, подставляет переменные, читает версию', () => {
@@ -28,6 +29,7 @@ describe('renderPrompt', () => {
       ['comment', commentMd, { voice: 'v', playbook: 'p', authorHandle: 'a', authorName: '', authorBio: 'b', authorFollowers: 10, niche: 'n', postText: 't', maxChars: 280, address: 'вы', usedOpeners: '—', hint: '' }],
       ['reply', replyMd, { voice: 'v', playbook: 'p', replyKind: 'k', thread: 't', authorHandle: 'a', lastMessage: 'm', maxChars: 320, address: 'вы', usedOpeners: '—', parentText: 'p', formatGuidance: 'g', authorInfo: 'i', hint: '' }],
       ['post', postMd, { voice: 'v', businessFacts: 'f', playbook: 'p', topic: 't', recentPosts: '—', maxChars: 500, variantsCount: 1, formatName: 'n', formatInstruction: 'i', bannedOpeners: 'b', hint: '' }],
+      ['vacancy', vacancyMd, { voice: 'v', businessFacts: 'f', authorHandle: 'a', authorName: '', authorBio: 'b', role: 'smm', postText: 't', maxChars: 450, address: 'вы', usedOpeners: '—', hint: '' }],
       ['voice', voiceMd, { samplesCount: 5, identity: 'i', samples: 's' }],
     ];
     for (const [name, md, vars] of all) {

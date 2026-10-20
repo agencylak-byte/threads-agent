@@ -78,6 +78,67 @@ export async function planComments(ctx: PlanContext, limit = 10): Promise<Action
   return created;
 }
 
+export const VACANCY_MARK = 'ВАКАНСИЯ';
+const VACANCY_MAX_AGE_DAYS = 5;
+
+/**
+ * Отклики на вакансии (20.10, Лера: «если видишь вакансии по SMM, контенту, рилс — откликайся»).
+ * Отклик на вакансию — самый стабильный канал продаж LAK. Идёт тем же типом comment-on-stranger
+ * (те же лимиты и пейсинг), но без порогов «похож ли автор на ЛПР» и с приоритетом в очереди.
+ */
+export async function planVacancies(ctx: PlanContext, limit = 10): Promise<Action[]> {
+  const mode = modeFor(ctx.autonomy, 'comment-on-stranger');
+  const status = initialStatus(mode);
+  if (!status) return [];
+  const now = ctx.now ?? Date.now();
+  const recent = await listRecentPosts(800);
+  const created: Action[] = [];
+  for (const post of recent) {
+    if (created.length >= limit) break;
+    const v = post.ai?.vacancy;
+    if (!v || v.fit < 50 || post.actionStatus !== 'none' || post.source === 'own') continue;
+    const dedupeKey = makeDedupeKey('comment-on-stranger', { postId: post.id, handle: post.authorHandle });
+    const [author, authorActions, exists] = await Promise.all([
+      getAuthor(post.authorHandle),
+      listActionsByTargetHandle(post.authorHandle),
+      hasActionWithKey(dedupeKey),
+    ]);
+    const gate = commentAllowed({
+      // работодатель может быть агентством — признак «исполнитель» для вакансий не стоп
+      post: { ...post, ai: post.ai ? { ...post.ai, isFreelancer: false } : post.ai },
+      author,
+      selfHandle: ctx.selfHandle,
+      authorActions,
+      existingKeys: new Set(exists ? [dedupeKey] : []),
+      dedupeKey,
+      authorCooldownDays: ctx.settings.authorCooldownDays,
+      maxPostAgeDays: VACANCY_MAX_AGE_DAYS,
+      now,
+    });
+    if (!gate.ok) continue;
+    try {
+      const a = await createAction(
+        {
+          type: 'comment-on-stranger',
+          targetHandle: post.authorHandle,
+          targetPostId: post.id,
+          threadUrl: post.url,
+          context: `${VACANCY_MARK}: ${v.role} (подходит на ${v.fit})\n${contextFor(post)}`,
+          dedupeKey,
+          autonomyMode: mode,
+        },
+        now,
+      );
+      await setActionStatus(post.id, 'proposed');
+      created.push(a);
+    } catch (e) {
+      if (!(e instanceof DuplicateActionError)) throw e;
+    }
+  }
+  if (created.length) log('info', `planner: +${created.length} откликов на вакансии`);
+  return created;
+}
+
 /** Ответы на чужие реплики: из /activity и тредов — записи, где нам ответили (isReplyTo на наш пост или на тред с нашим комментарием). */
 export async function planReplies(ctx: PlanContext, limit = 10): Promise<Action[]> {
   const now = ctx.now ?? Date.now();

@@ -80,6 +80,24 @@ export async function markClassified(id: string, ai: PostAi): Promise<void> {
   await tx.done;
 }
 
+/** Отправить посты на переоценку (новый промт): ai и actionStatus «skipped» сбрасываются. Возвращает число. */
+export async function resetClassificationFor(match: (p: Post) => boolean): Promise<number> {
+  const db = await openDb();
+  const tx = db.transaction('posts', 'readwrite');
+  let n = 0;
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    const p = cursor.value as StoredPost;
+    if (p.ai && match(p)) {
+      await cursor.update({ ...p, ai: undefined, classifiedAt: 0, actionStatus: p.actionStatus === 'skipped' ? 'none' : p.actionStatus } as StoredPost);
+      n++;
+    }
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return n;
+}
+
 export async function setActionStatus(id: string, actionStatus: PostActionStatus): Promise<void> {
   const db = await openDb();
   const tx = db.transaction('posts', 'readwrite');

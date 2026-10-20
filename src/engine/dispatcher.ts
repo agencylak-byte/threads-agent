@@ -81,7 +81,7 @@ export async function dispatchOnce(execute: Executor, now = Date.now()): Promise
     .filter((a) => a.draftText || a.finalText)
     .filter((a) => !a.scheduledFor || a.scheduledFor <= now)
     // свои посты и ответы под ними — вперёд: у них свои лимиты, они не должны ждать за очередью комментариев чужим
-    .sort((a, b) => priority(a.type) - priority(b.type) || (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt));
+    .sort((a, b) => priorityOf(a) - priorityOf(b) || (a.decidedAt ?? a.createdAt) - (b.decidedAt ?? b.createdAt));
   if (!queued.length) return 'idle';
 
   const [dayStart, dayEnd] = dayBounds(now, settings.timezone);
@@ -167,6 +167,11 @@ async function applyResult(action: Action, r: ExecResult, now: number): Promise<
     scheduledFor: retry ? now + delay : undefined,
   });
   log('error', `${action.type} → @${action.targetHandle} failed (attempt ${action.attempts + 1}): ${r.error}`);
+}
+
+/** Отклик на вакансию — раньше обычных комментариев: вакансии закрываются быстро. */
+function priorityOf(a: Action): number {
+  return a.type === 'comment-on-stranger' && a.context?.startsWith('ВАКАНСИЯ') ? 1.5 : priority(a.type);
 }
 
 function priority(type: ActionType): number {

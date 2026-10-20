@@ -13,6 +13,11 @@ const ItemSchema = z.object({
   topic: z.string().default(''),
   niche: z.string().default('не определено'),
   reason: z.string().default(''),
+  vacancy: z
+    .object({ role: z.string().default('other'), fit: z.number().min(0).max(100).default(50) })
+    .nullable()
+    .optional()
+    .catch(null),
 });
 // модель иногда отдаёт голый массив вместо {items:[…]}
 const ResultSchema = z.union([z.object({ items: z.array(ItemSchema) }), z.array(ItemSchema).transform((items) => ({ items }))]);
@@ -46,6 +51,7 @@ export async function classifyPosts(posts: Post[]): Promise<{ ai: Map<string, Po
       topic: it.topic || undefined,
       niche: it.niche,
       isFreelancer: it.isFreelancer,
+      ...(it.vacancy ? { vacancy: { role: it.vacancy.role, fit: Math.round(it.vacancy.fit) } } : {}),
       reason: it.reason,
       model: usage.model,
       at: now,
